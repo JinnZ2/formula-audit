@@ -57,7 +57,7 @@ class TestCheck(unittest.TestCase):
         r = chk("p*V = n*R*T", p="Pa", V="m**3", n="mol", R="J/(mol*K)", T="K")
         self.assertEqual(r["verdict"], "PASS")
         self.assertEqual(r["dims"]["lhs"]["text"], "L^2 M T^-2")
-        self.assertEqual(r["status"], "OBSERVED")
+        self.assertEqual(r["status"], "DERIVED")
         self.assertEqual(chk("v == sqrt(2*g*h)", v="m/s", g="m/s**2", h="m")["verdict"], "PASS")
 
     def test_fail_sides(self):
@@ -106,18 +106,41 @@ class TestCheck(unittest.TestCase):
         self.assertEqual(check_formula({"formula": "E = m", "symbols": {"E": "J", "m": "J"},
                                         "status": "sure"})["verdict"], "VOID")
 
-    def test_slots_and_status(self):
+    def test_slots(self):
         r = check_formula({"formula": "F = m*a", "symbols": {"F": "N", "m": "kg", "a": "m/s**2"},
-                           "slots": {"sign": "+"}, "source_path": "x.md:3",
-                           "status": "PROPOSED"})
-        self.assertEqual(r["slots"]["limit"], "VOID")
-        self.assertEqual(r["slots"]["magnitude_range"], "VOID")
+                           "slots": {"sign": "+"}, "source_path": "x.md:3"})
+        self.assertEqual(r["slots"]["limit"], {"slot_state": "VOID", "given": None})
+        self.assertEqual(r["slots"]["magnitude_range"]["slot_state"], "VOID")
+        self.assertEqual(r["slots"]["sign"]["slot_state"], "UNCHECKED")
         self.assertEqual(r["slots"]["sign"]["given"], "+")
-        self.assertEqual(r["slots"]["sign"]["checked"], "VOID")
-        self.assertEqual(r["status"], "PROPOSED")
         self.assertEqual(r["provenance"]["source_path"], "x.md:3")
         self.assertIsNone(r["human_interest"])
         self.assertIsNone(r["ai_interest"])
+        for v in r["slots"].values():            # no slot ever reads as checked or passed
+            self.assertIn(v["slot_state"], ("VOID", "UNCHECKED"))
+
+    def test_status_tags(self):
+        r = check_formula({"formula": "F = m*a", "symbols": {
+            "F": {"unit": "N", "status": "OBSERVED"}, "m": {"unit": "kg", "status": "PROPOSED"},
+            "a": "m/s**2"}})
+        self.assertEqual(r["verdict"], "PASS")
+        self.assertEqual(r["status"], "DERIVED")          # never OBSERVED, whatever the tags
+        self.assertEqual({k: v["status"] for k, v in r["symbols"].items()},
+                         {"F": "OBSERVED", "m": "PROPOSED", "a": None})
+        self.assertEqual(r["symbols"]["F"]["dim"], "L M T^-2")
+        f = check_formula({"formula": "F = m", "symbols": {"F": "N", "m": "kg"},
+                           "status": "PROPOSED"})
+        self.assertEqual((f["verdict"], f["status"]), ("FAIL", "DERIVED"))
+        self.assertEqual(f["symbols"]["m"]["status"], "PROPOSED")     # entry-level default
+        v = check_formula({"formula": "F = m", "symbols": {
+            "F": "N", "m": {"unit": "kg", "status": "certain"}}})
+        self.assertEqual(v["verdict"], "VOID")
+        self.assertIsNone(v["status"])
+        self.assertIn("certain", v["symbols"]["m"]["void_reason"])
+        u = check_formula({"formula": "F = m", "symbols": {"F": "N", "m": {"status": "OBSERVED"}}})
+        self.assertEqual(u["verdict"], "VOID")
+        for rec in (r, f, v, u):
+            self.assertNotEqual(rec["status"], "OBSERVED")
 
 
 class TestCliAndScan(unittest.TestCase):
@@ -151,6 +174,8 @@ class TestCliAndScan(unittest.TestCase):
                              ["E = m*c**2", "F = m*a"])
             for e in draft["formulas"]:
                 self.assertEqual(e["status"], "PROPOSED")
+                for sym in e["symbols"].values():
+                    self.assertEqual(sym, {"unit": None, "status": "PROPOSED"})
                 self.assertEqual(check_formula(e)["verdict"], "VOID")
             out = Path(d) / "draft.json"
             self.assertEqual(self.run_cli("scan", d, "-o", str(out)).returncode, 0)

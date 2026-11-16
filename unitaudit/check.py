@@ -21,7 +21,7 @@ from .dims import Dim, ONE, UnknownUnit, _number, unit_dim
 DIMENSIONLESS_ARG = ("exp", "log", "sin", "cos", "tan")
 SLOTS = ("limit", "sign", "magnitude_range")
 STATUS = ("OBSERVED", "DERIVED", "PROPOSED")
-VERSION = "branch1-0"
+VERSION = "branch1-1"
 
 
 class Void(Exception):
@@ -121,40 +121,56 @@ def split_sides(formula):
     return formula[:at], formula[at + width:]
 
 
-def symbol_table(symbols):
+def symbol_table(symbols, default_status=None):
+    """{name: unit} or {name: {"unit": unit, "status": tag}} -> (dims, records).
+    Each symbol's unit carries its own tag: OBSERVED (read from a source),
+    PROPOSED (scanner / guess), DERIVED; not given = null, never filled in.
+    default_status is the entry-level tag, used for symbols with none."""
     if not isinstance(symbols, dict):
         raise Void("symbols is not a {name: unit} table")
-    table = {}
-    for name, unit in symbols.items():
-        if unit is None:
-            raise Void(f"symbol {name!r} has no unit given")
-        try:
-            table[name] = unit_dim(unit)
-        except UnknownUnit as e:
-            raise Void(f"symbol {name!r}: {e}")
-    return table
+    table, records, first = {}, {}, None
+    for name, spec in symbols.items():
+        unit, status = (spec.get("unit"), spec.get("status", default_status)) \
+            if isinstance(spec, dict) else (spec, default_status)
+        rec = {"unit": unit, "dim": None, "status": status, "void_reason": None}
+        records[name] = rec
+        if status is not None and status not in STATUS:
+            rec["void_reason"] = f"status {status!r} is not one of {', '.join(STATUS)}"
+        elif unit is None:
+            rec["void_reason"] = "no unit given"
+        else:
+            try:
+                table[name] = unit_dim(unit)
+                rec["dim"] = str(table[name])
+            except UnknownUnit as e:
+                rec["void_reason"] = str(e)
+        if rec["void_reason"] and first is None:
+            first = f"symbol {name!r}: {rec['void_reason']}"
+    return table, records, first
 
 
 def slot_record(slots):
-    """Slots are carried, not checked, in this branch: there are no numeric
-    values to evaluate a limit, a sign or a magnitude with."""
+    """slot_state per slot: VOID = not given. UNCHECKED = given, and not
+    checked: this branch has no numeric values to evaluate a limit, a sign
+    or a magnitude with. UNCHECKED is not a pass."""
     slots = slots if isinstance(slots, dict) else {}
     out = {}
     for s in SLOTS:
         given = slots.get(s)
-        out[s] = "VOID" if given is None else {"given": given, "checked": "VOID",
-                                               "reason": "no numeric evaluation in branch 1"}
+        out[s] = ({"slot_state": "VOID", "given": None} if given is None else
+                  {"slot_state": "UNCHECKED", "given": given,
+                   "reason": "no values given to evaluate it with; nothing was checked"})
     return out
 
 
 def check_formula(entry, index=None, input_path=None):
     formula = entry.get("formula") if isinstance(entry, dict) else None
     rec = {"formula": formula, "verdict": "VOID", "void_reason": None, "located_error": None,
-           "dims": {"lhs": None, "rhs": None}, "status": None,
+           "dims": {"lhs": None, "rhs": None}, "status": None, "symbols": None,
            "provenance": {"source_path": entry.get("source_path") if isinstance(entry, dict)
                           else None, "input": input_path, "index": index,
                           "tool": "unitaudit " + VERSION,
-                          "symbols_status_given": entry.get("status")
+                          "entry_status_given": entry.get("status")
                           if isinstance(entry, dict) else None},
            "slots": slot_record(entry.get("slots") if isinstance(entry, dict) else None),
            "human_interest": None, "ai_interest": None}
@@ -165,7 +181,9 @@ def check_formula(entry, index=None, input_path=None):
         given = entry.get("status")
         if given is not None and given not in STATUS:
             raise Void(f"status {given!r} is not one of {', '.join(STATUS)}")
-        table = symbol_table(entry.get("symbols"))
+        table, rec["symbols"], bad = symbol_table(entry.get("symbols"), given)
+        if bad:
+            raise Void(bad)
         sides = dict(zip(("lhs", "rhs"), split_sides(formula)))
         got = {}
         for side in ("lhs", "rhs"):
@@ -184,13 +202,14 @@ def check_formula(entry, index=None, input_path=None):
                                     "dims": [str(got["lhs"]), str(got["rhs"])]}
         else:
             rec["verdict"] = "PASS"
-        # computed here from the given table: OBSERVED, unless the table itself is PROPOSED
-        rec["status"] = "PROPOSED" if given == "PROPOSED" else "OBSERVED"
+        # a verdict follows from the supplied unit table: DERIVED. What was
+        # observed, if anything, is each symbol's unit; those carry their own tags.
+        rec["status"] = "DERIVED"
     except Fail as f:
         rec["verdict"] = "FAIL"
         rec["located_error"] = {**_where(f.node, src, side), "rule": f.rule,
                                 "dims": [str(d) for d in f.dims]}
-        rec["status"] = "PROPOSED" if entry.get("status") == "PROPOSED" else "OBSERVED"
+        rec["status"] = "DERIVED"
     except Void as v:
         rec["verdict"] = "VOID"
         rec["void_reason"] = v.reason

@@ -1,5 +1,6 @@
-{"formulas": [
- {"formula": "E = m*c**2", "symbols": {"E": "J", "m": "kg", "c": "m/s"}, "source_path": "example", "slots": {}},
+{"note": "example input. Units here were typed in for the example, not read from a source: where a tag is given it is PROPOSED; where none is given it stays null.",
+ "formulas": [
+ {"formula": "E = m*c**2", "symbols": {"E": {"unit": "J", "status": "PROPOSED"}, "m": {"unit": "kg", "status": "PROPOSED"}, "c": {"unit": "m/s", "status": "PROPOSED"}}, "source_path": "example", "slots": {}},
  {"formula": "F = m*a", "symbols": {"F": "N", "m": "kg", "a": "m/s**2"}, "source_path": "example", "slots": {"sign": "F and a have the same sign"}},
  {"formula": "p*V = n*R*T", "symbols": {"p": "Pa", "V": "m**3", "n": "mol", "R": "J/(mol*K)", "T": "K"}, "source_path": "example", "slots": {}},
  {"formula": "E = m*c", "symbols": {"E": "J", "m": "kg", "c": "m/s"}, "source_path": "example", "slots": {}},

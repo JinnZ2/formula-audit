@@ -61,7 +61,9 @@ def scan(root):
             for text in _candidates(line):
                 names = _formula_shaped(text)
                 if names:
-                    out.append({"formula": text.strip(), "symbols": {n: None for n in names},
+                    out.append({"formula": text.strip(),
+                                "symbols": {n: {"unit": None, "status": "PROPOSED"}
+                                            for n in names},
                                 "source_path": f"{f}:{i}", "slots": {},
                                 "status": "PROPOSED"})
     return {"draft": True, "status": "PROPOSED",

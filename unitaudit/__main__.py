@@ -49,8 +49,10 @@ def main(argv):
                          + " vs ".join(f"[{x}]" for x in e["dims"]))
             else:
                 line += f" {r['void_reason']}"
-            void = [s for s, v in r["slots"].items() if v == "VOID"]
-            print(line + f" | status {r['status']} | void slots: {', '.join(void) or 'none'}")
+            slots = " ".join(f"{k}={v['slot_state']}" for k, v in r["slots"].items())
+            tags = "" if not r["symbols"] else " | units: " + " ".join(
+                f"{k}:{v['status'] or 'null'}" for k, v in r["symbols"].items())
+            print(line + f" | verdict status {r['status']}{tags} | slots: {slots}")
         print(report["counts"])
     c = report["counts"]
     return 1 if c["FAIL"] else (3 if c["VOID"] else 0)
