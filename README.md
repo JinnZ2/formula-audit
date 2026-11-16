@@ -7,7 +7,7 @@ and passes its own tests within tested scope; it reads Metamath databases
 only. Branch 2b (data points and intersections) is implemented and passes its
 own tests within tested scope; only its interval tier is rigorous. The seam
 from 2b's proposals to the 2a kernel is implemented, with no proof search and a
-hand-written axiom file that has not been reviewed. Branch 4
+hand-written axiom file audited by one reader (second reader: VOID). Branch 4
 (word slots) and branch 5 (inference ladder) are implemented and pass their own
 tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
 case uses constructed numbers. Branch 4's
@@ -247,8 +247,9 @@ not built     relative tolerance, inequalities (< <=), more than two formulas
 
 Status: implemented and passing its own tests within tested scope. No proof
 search is built: a proof has to be written by someone and put in a file. The
-database `tests/data/algebra.mm` was written by hand here and has not been
-reviewed by anyone else.
+database `tests/data/algebra.mm` was written by hand here. Its axioms were
+audited (`REFERENCES/algebra_axiom_audit.md`): none fails, and the PASS route
+is OPEN. That audit had one reader; second reader: VOID.
 
 ```text
 numcheck --proposals proposals.json       identity candidates: {lhs, rhs, domain, status, ...}
@@ -297,13 +298,32 @@ translatable  numbers 0 to 9, -n, p/q; + - * /; ** 0 to 9; ** (1/2) and sqrt(); 
               written as that numeral, so the statement is about that value only.
 ```
 
+Audit of the axioms (`python3 -m kernel.axiom_audit`)
+
+```text
+PASS route     OPEN: no axiom FAILS, no guard row is GUARD_WEAKER or UNCLEAR.
+               It would be marked BLOCKED here if either changed.
+83 statements  22 syntax; 28 equational and 7 propositional DERIVED (a polynomial
+               identity proved on a full grid, exact arithmetic, or a truth table);
+               26 conditional sampled at exact points with no counterexample
+guard table    45 rows, all GUARD_OK: algebra.mm's guards beside the antecedents of
+               the set.mm statement each axiom maps to, typing aside
+consistency    model argument (reals + fixed fill), rests on the guard table.
+               status DERIVED. The conditional axioms' truth in that model: DERIVED
+               via the set.mm map.
+second reader  VOID. The map, the guard table and the model argument were made by
+               one reader (this build). The slot is for a pass by a different model
+               or person; it is empty.
+```
+
 Limits of the seam
 
 ```text
 no search       nothing here looks for a proof
 axioms          algebra.mm is small and hand-written (equality, field axioms for
-                + - * /, order, sqrt on 0 <_ t, powers 0 to 9). Not reviewed. An
-                unsound axiom would make every PASS against it worthless.
+                + - * /, order, sqrt on 0 <_ t, powers 0 to 9). Audited by one
+                reader only. An unsound axiom would make every PASS against it
+                worthless.
 not in it       exp log sin cos tan abs, integers above 9, decimals other than p/q
                 with small p and q: untranslatable -> VOID
 domain          the bounds become hypotheses the proof MAY use; the statement is

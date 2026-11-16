@@ -1,0 +1,447 @@
+{
+ "note": "statements quoted from set.mm for the labels the axiom map names; comments removed, whitespace joined. Recorded so the guard table can be rebuilt without the 52 MB file.",
+ "setmm": "set.mm fetched 2026-11-16, 51,952,199 bytes, sha256 099864b6785c45be...",
+ "quotes": {
+  "0le1": {
+   "label": "0le1",
+   "kind": "$p",
+   "statement": "|- 0 <_ 1",
+   "hypotheses": []
+  },
+  "0ne1": {
+   "label": "0ne1",
+   "kind": "$p",
+   "statement": "|- 0 =/= 1",
+   "hypotheses": []
+  },
+  "addass": {
+   "label": "addass",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC /\\ C e. CC ) -> ( ( A + B ) + C ) = ( A + ( B + C ) ) )",
+   "hypotheses": []
+  },
+  "addcom": {
+   "label": "addcom",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC ) -> ( A + B ) = ( B + A ) )",
+   "hypotheses": []
+  },
+  "adddi": {
+   "label": "adddi",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC /\\ C e. CC ) -> ( A x. ( B + C ) ) = ( ( A x. B ) + ( A x. C ) ) )",
+   "hypotheses": []
+  },
+  "addrid": {
+   "label": "addrid",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A + 0 ) = A )",
+   "hypotheses": []
+  },
+  "ax-1": {
+   "label": "ax-1",
+   "kind": "$a",
+   "statement": "|- ( ph -> ( ps -> ph ) )",
+   "hypotheses": []
+  },
+  "ax-2": {
+   "label": "ax-2",
+   "kind": "$a",
+   "statement": "|- ( ( ph -> ( ps -> ch ) ) -> ( ( ph -> ps ) -> ( ph -> ch ) ) )",
+   "hypotheses": []
+  },
+  "ax-3": {
+   "label": "ax-3",
+   "kind": "$a",
+   "statement": "|- ( ( -. ph -> -. ps ) -> ( ps -> ph ) )",
+   "hypotheses": []
+  },
+  "ax-mp": {
+   "label": "ax-mp",
+   "kind": "$a",
+   "statement": "|- ps",
+   "hypotheses": [
+    "|- ph",
+    "|- ( ph -> ps )"
+   ]
+  },
+  "breq1": {
+   "label": "breq1",
+   "kind": "$p",
+   "statement": "|- ( A = B -> ( A R C <-> B R C ) )",
+   "hypotheses": []
+  },
+  "breq2": {
+   "label": "breq2",
+   "kind": "$p",
+   "statement": "|- ( A = B -> ( C R A <-> C R B ) )",
+   "hypotheses": []
+  },
+  "c1": {
+   "label": "c1",
+   "kind": "$a",
+   "statement": "class 1",
+   "hypotheses": []
+  },
+  "c2": {
+   "label": "c2",
+   "kind": "$a",
+   "statement": "class 2",
+   "hypotheses": []
+  },
+  "c3": {
+   "label": "c3",
+   "kind": "$a",
+   "statement": "class 3",
+   "hypotheses": []
+  },
+  "c4": {
+   "label": "c4",
+   "kind": "$a",
+   "statement": "class 4",
+   "hypotheses": []
+  },
+  "c5": {
+   "label": "c5",
+   "kind": "$a",
+   "statement": "class 5",
+   "hypotheses": []
+  },
+  "c6": {
+   "label": "c6",
+   "kind": "$a",
+   "statement": "class 6",
+   "hypotheses": []
+  },
+  "c7": {
+   "label": "c7",
+   "kind": "$a",
+   "statement": "class 7",
+   "hypotheses": []
+  },
+  "c8": {
+   "label": "c8",
+   "kind": "$a",
+   "statement": "class 8",
+   "hypotheses": []
+  },
+  "c9": {
+   "label": "c9",
+   "kind": "$a",
+   "statement": "class 9",
+   "hypotheses": []
+  },
+  "caddc": {
+   "label": "caddc",
+   "kind": "$a",
+   "statement": "class +",
+   "hypotheses": []
+  },
+  "cc0": {
+   "label": "cc0",
+   "kind": "$a",
+   "statement": "class 0",
+   "hypotheses": []
+  },
+  "cdiv": {
+   "label": "cdiv",
+   "kind": "$a",
+   "statement": "class /",
+   "hypotheses": []
+  },
+  "cexp": {
+   "label": "cexp",
+   "kind": "$a",
+   "statement": "class ^",
+   "hypotheses": []
+  },
+  "cfv": {
+   "label": "cfv",
+   "kind": "$a",
+   "statement": "class ( F ` A )",
+   "hypotheses": []
+  },
+  "cle": {
+   "label": "cle",
+   "kind": "$a",
+   "statement": "class <_",
+   "hypotheses": []
+  },
+  "cmin": {
+   "label": "cmin",
+   "kind": "$a",
+   "statement": "class -",
+   "hypotheses": []
+  },
+  "cmul": {
+   "label": "cmul",
+   "kind": "$a",
+   "statement": "class x.",
+   "hypotheses": []
+  },
+  "cneg": {
+   "label": "cneg",
+   "kind": "$a",
+   "statement": "class -u A",
+   "hypotheses": []
+  },
+  "co": {
+   "label": "co",
+   "kind": "$a",
+   "statement": "class ( A F B )",
+   "hypotheses": []
+  },
+  "csqrt": {
+   "label": "csqrt",
+   "kind": "$a",
+   "statement": "class sqrt",
+   "hypotheses": []
+  },
+  "df-2": {
+   "label": "df-2",
+   "kind": "$a",
+   "statement": "|- 2 = ( 1 + 1 )",
+   "hypotheses": []
+  },
+  "df-3": {
+   "label": "df-3",
+   "kind": "$a",
+   "statement": "|- 3 = ( 2 + 1 )",
+   "hypotheses": []
+  },
+  "df-4": {
+   "label": "df-4",
+   "kind": "$a",
+   "statement": "|- 4 = ( 3 + 1 )",
+   "hypotheses": []
+  },
+  "df-5": {
+   "label": "df-5",
+   "kind": "$a",
+   "statement": "|- 5 = ( 4 + 1 )",
+   "hypotheses": []
+  },
+  "df-6": {
+   "label": "df-6",
+   "kind": "$a",
+   "statement": "|- 6 = ( 5 + 1 )",
+   "hypotheses": []
+  },
+  "df-7": {
+   "label": "df-7",
+   "kind": "$a",
+   "statement": "|- 7 = ( 6 + 1 )",
+   "hypotheses": []
+  },
+  "df-8": {
+   "label": "df-8",
+   "kind": "$a",
+   "statement": "|- 8 = ( 7 + 1 )",
+   "hypotheses": []
+  },
+  "df-9": {
+   "label": "df-9",
+   "kind": "$a",
+   "statement": "|- 9 = ( 8 + 1 )",
+   "hypotheses": []
+  },
+  "divcan1": {
+   "label": "divcan1",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC /\\ B =/= 0 ) -> ( ( A / B ) x. B ) = A )",
+   "hypotheses": []
+  },
+  "eqcom": {
+   "label": "eqcom",
+   "kind": "$p",
+   "statement": "|- ( A = B <-> B = A )",
+   "hypotheses": []
+  },
+  "eqid": {
+   "label": "eqid",
+   "kind": "$p",
+   "statement": "|- A = A",
+   "hypotheses": []
+  },
+  "eqtr": {
+   "label": "eqtr",
+   "kind": "$p",
+   "statement": "|- ( ( A = B /\\ B = C ) -> A = C )",
+   "hypotheses": []
+  },
+  "exp0": {
+   "label": "exp0",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A ^ 0 ) = 1 )",
+   "hypotheses": []
+  },
+  "exp1": {
+   "label": "exp1",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A ^ 1 ) = A )",
+   "hypotheses": []
+  },
+  "expp1": {
+   "label": "expp1",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ N e. NN0 ) -> ( A ^ ( N + 1 ) ) = ( ( A ^ N ) x. A ) )",
+   "hypotheses": []
+  },
+  "fveq2": {
+   "label": "fveq2",
+   "kind": "$p",
+   "statement": "|- ( A = B -> ( F ` A ) = ( F ` B ) )",
+   "hypotheses": []
+  },
+  "leadd1": {
+   "label": "leadd1",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ B e. RR /\\ C e. RR ) -> ( A <_ B <-> ( A + C ) <_ ( B + C ) ) )",
+   "hypotheses": []
+  },
+  "leid": {
+   "label": "leid",
+   "kind": "$p",
+   "statement": "|- ( A e. RR -> A <_ A )",
+   "hypotheses": []
+  },
+  "letr": {
+   "label": "letr",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ B e. RR /\\ C e. RR ) -> ( ( A <_ B /\\ B <_ C ) -> A <_ C ) )",
+   "hypotheses": []
+  },
+  "letri3": {
+   "label": "letri3",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ B e. RR ) -> ( A = B <-> ( A <_ B /\\ B <_ A ) ) )",
+   "hypotheses": []
+  },
+  "letric": {
+   "label": "letric",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ B e. RR ) -> ( A <_ B \\/ B <_ A ) )",
+   "hypotheses": []
+  },
+  "mulass": {
+   "label": "mulass",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC /\\ C e. CC ) -> ( ( A x. B ) x. C ) = ( A x. ( B x. C ) ) )",
+   "hypotheses": []
+  },
+  "mulcom": {
+   "label": "mulcom",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC ) -> ( A x. B ) = ( B x. A ) )",
+   "hypotheses": []
+  },
+  "mulge0": {
+   "label": "mulge0",
+   "kind": "$p",
+   "statement": "|- ( ( ( A e. RR /\\ 0 <_ A ) /\\ ( B e. RR /\\ 0 <_ B ) ) -> 0 <_ ( A x. B ) )",
+   "hypotheses": []
+  },
+  "mulrid": {
+   "label": "mulrid",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A x. 1 ) = A )",
+   "hypotheses": []
+  },
+  "negeq": {
+   "label": "negeq",
+   "kind": "$p",
+   "statement": "|- ( A = B -> -u A = -u B )",
+   "hypotheses": []
+  },
+  "negid": {
+   "label": "negid",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A + -u A ) = 0 )",
+   "hypotheses": []
+  },
+  "negsub": {
+   "label": "negsub",
+   "kind": "$p",
+   "statement": "|- ( ( A e. CC /\\ B e. CC ) -> ( A + -u B ) = ( A - B ) )",
+   "hypotheses": []
+  },
+  "oveq1": {
+   "label": "oveq1",
+   "kind": "$p",
+   "statement": "|- ( A = B -> ( A F C ) = ( B F C ) )",
+   "hypotheses": []
+  },
+  "oveq2": {
+   "label": "oveq2",
+   "kind": "$p",
+   "statement": "|- ( A = B -> ( C F A ) = ( C F B ) )",
+   "hypotheses": []
+  },
+  "pm3.2": {
+   "label": "pm3.2",
+   "kind": "$p",
+   "statement": "|- ( ph -> ( ps -> ( ph /\\ ps ) ) )",
+   "hypotheses": []
+  },
+  "remsqsqrt": {
+   "label": "remsqsqrt",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ 0 <_ A ) -> ( ( sqrt ` A ) x. ( sqrt ` A ) ) = A )",
+   "hypotheses": []
+  },
+  "simpl": {
+   "label": "simpl",
+   "kind": "$p",
+   "statement": "|- ( ( ph /\\ ps ) -> ph )",
+   "hypotheses": []
+  },
+  "simpr": {
+   "label": "simpr",
+   "kind": "$p",
+   "statement": "|- ( ( ph /\\ ps ) -> ps )",
+   "hypotheses": []
+  },
+  "sqrtge0": {
+   "label": "sqrtge0",
+   "kind": "$p",
+   "statement": "|- ( ( A e. RR /\\ 0 <_ A ) -> 0 <_ ( sqrt ` A ) )",
+   "hypotheses": []
+  },
+  "sqval": {
+   "label": "sqval",
+   "kind": "$p",
+   "statement": "|- ( A e. CC -> ( A ^ 2 ) = ( A x. A ) )",
+   "hypotheses": []
+  },
+  "wa": {
+   "label": "wa",
+   "kind": "$a",
+   "statement": "wff ( ph /\\ ps )",
+   "hypotheses": []
+  },
+  "wbr": {
+   "label": "wbr",
+   "kind": "$a",
+   "statement": "wff A R B",
+   "hypotheses": []
+  },
+  "wceq": {
+   "label": "wceq",
+   "kind": "$a",
+   "statement": "wff A = B",
+   "hypotheses": []
+  },
+  "wi": {
+   "label": "wi",
+   "kind": "$a",
+   "statement": "wff ( ph -> ps )",
+   "hypotheses": []
+  },
+  "wn": {
+   "label": "wn",
+   "kind": "$a",
+   "statement": "wff -. ph",
+   "hypotheses": []
+  }
+ }
+}
