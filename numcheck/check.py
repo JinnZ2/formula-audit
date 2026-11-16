@@ -31,8 +31,11 @@ first, to the depth limit) and every piece is read:
   pieces that FAIL, none that hold           -> FAILS, located
   otherwise                                  -> UNDECIDED
 An UNDECIDED at tolerance 0 with no piece against it, whose two sides agree
-at every sampled exact point, is handed on as a PROPOSED identity (see
-"proposal" on the record). No proof is attempted here.
+at every sampled exact point, is put on the record as an identity candidate
+("proposal"). If lhs - rhs is a polynomial in the interval inputs and is 0
+on a full grid of (degree + 1) exact points per variable, that is a proof:
+the proposal's status is DERIVED and it carries the proof. Otherwise it
+stays PROPOSED, with the reason. The check's own verdict is not changed.
 
 An intersection: two formulas and a region (a box: an interval per region
 variable). On a subbox, both formulas HOLD (enclosure inside tolerance:
@@ -49,6 +52,7 @@ a depth limit.
               failure found
 """
 import ast
+import itertools
 from decimal import Decimal
 from fractions import Fraction
 
@@ -56,11 +60,13 @@ from unitaudit.check import check_formula as unit_check
 from unitaudit.check import slot_record, split_sides, Void as UnitVoid, STATUS
 
 from .interval import Interval
+from .poly import NonPolynomial, degree_of_difference
 from .tiers import DecSys, FloatSys, IntSys, NumVoid, TierCannot, evaluate
 
-VERSION = "numcheck branch2b-3"
+VERSION = "numcheck branch2b-4"
 DEFAULTS = {"decimal_precision": 50, "precision": 30, "max_precision": 120, "depth": 8}
 MAX_SUBBOXES = 20000
+GRID_CAP = 10 ** 4   # largest point grid a polynomial proof will evaluate
 LIST_CAP = 32        # pieces listed per kind on a record; the counts are complete
 
 
@@ -234,11 +240,66 @@ def _bisect_point(sides, tol, env, prec, depth_limit):
                      "first_straddling_piece": first_open}
 
 
+def _polynomial_proof(sides, env, names, prec):
+    """lhs - rhs as a polynomial in the interval inputs (the other symbols are
+    constants at their given values). Returns (proof or None, reading).
+    proof is None with a reason when it is not a polynomial or the grid is too
+    large; raises _Differs when a grid point shows the two sides differ."""
+    try:
+        deg = degree_of_difference(sides, set(names))
+    except NonPolynomial as e:
+        return None, {"polynomial": False, "reason": f"non_polynomial: {e}"}
+    if any(not v.is_point for n, v in env.items() if n not in names):
+        return None, {"polynomial": True, "degrees": deg, "reason": "an input is not exact"}
+    size = 1
+    for n in names:
+        size *= deg[n] + 1
+    reading = {"polynomial": True, "degrees": deg, "grid_size": size, "grid_cap": GRID_CAP}
+    if size > GRID_CAP:
+        return None, {**reading, "reason": f"grid too large: {size} points > {GRID_CAP}"}
+    axes = []
+    for n in names:
+        d, iv = deg[n], env[n]
+        # d + 1 distinct exact values, taken inside the domain
+        axes.append([iv.lo + iv.width * Fraction(k, d) if d else iv.lo for k in range(d + 1)])
+    point = dict(env)
+    for combo in itertools.product(*axes):
+        for n, v in zip(names, combo):
+            point[n] = Interval(v)
+        S = IntSys(prec)
+        _, _, d = _difference(sides, point, S)
+        if S.used_enclosure or not d.is_point:
+            return None, {**reading, "reason": "a grid value was not exact"}
+        if d.lo != 0:
+            raise _Differs({n: str(v) for n, v in zip(names, combo)}, str(d.lo))
+    return ({"method": "polynomial_identity_by_points",
+             "degrees": deg, "degree_kind": "upper bounds read from the ast",
+             "grid_points_per_variable": {n: deg[n] + 1 for n in names},
+             "grid": {n: [str(v) for v in ax] for n, ax in zip(names, axes)},
+             "grid_size": size, "difference_at_every_grid_point": "0",
+             "arithmetic": "exact (Fraction)",
+             "argument": "a polynomial of degree at most d_i in each variable that is 0 on "
+                         "a full grid of d_i + 1 distinct values per variable is the zero "
+                         "polynomial",
+             "scope": "all values of " + ", ".join(names)
+                      + (" (not only the given domain)" if names else "")
+                      + "; every other symbol at its given value"},
+            reading)
+
+
+class _Differs(Exception):
+    def __init__(self, at, value):
+        super().__init__("differs")
+        self.at, self.value = at, value
+
+
 def _identity_candidate(entry, sides, tol, env, rec, prec, index, input_path):
     """tolerance 0, interval inputs, UNDECIDED, and nothing against it: the two
     sides may be the same function. Sample exact points; if the difference
     is 0 at every one, hand the pair on as a PROPOSED identity. Nothing is
-    proved here."""
+    proved here by sampling. If lhs - rhs is a polynomial in the interval
+    inputs, the full-grid check of _polynomial_proof IS a proof: the
+    proposal then carries it and its status is DERIVED."""
     b = rec["bisection"]
     if tol != 0 or b is None or b["hold"] or b["fail"]:
         return None
@@ -264,13 +325,20 @@ def _identity_candidate(entry, sides, tol, env, rec, prec, index, input_path):
         exact += d.is_point
     if not contain:
         return None
+    try:
+        proof, reading = _polynomial_proof(sides, env, names, prec)
+    except _Differs:
+        return None                          # a grid point shows they are not equal
     return {"lhs": sides[0][0], "rhs": sides[1][0],
             "domain": {n: {"lo": str(env[n].lo), "hi": str(env[n].hi)} for n in names},
             "fixed": {n: str(v.lo) for n, v in sorted(env.items()) if v.is_point},
             "units": {n: rec["inputs"][n]["unit"] for n in sorted(env)},
             "source_check": {"input": input_path, "index": index, "formula": rec["formula"],
                              "source_path": rec["provenance"]["source_path"]},
-            "status": "PROPOSED",
+            "status": "DERIVED" if proof else "PROPOSED",
+            "polynomial": reading,
+            "proof": proof, "proof_attempted": proof is not None,
+            "why_not_proved": None if proof else reading["reason"],
             "evidence": {"verdict": "UNDECIDED at tolerance 0",
                          "pieces_straddling_at_depth_limit": b["straddle_at_depth_limit"],
                          "depth_limit": b["depth_limit"],
@@ -279,7 +347,6 @@ def _identity_candidate(entry, sides, tol, env, rec, prec, index, input_path):
                          "samples_whose_enclosure_contains_0": contain,
                          "samples_with_no_value": void,
                          "note": "sampling is evidence, not proof"},
-            "proof": None, "proof_attempted": False,
             "human_interest": None, "ai_interest": None}
 
 

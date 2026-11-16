@@ -3,7 +3,9 @@
   --fast   skip the interval confirmation when triage gives a prediction: the
            prediction is the verdict, and the record carries rigorous: false.
 
-  --proposals FILE   add the PROPOSED identity candidates of this run to FILE (JSON).
+  --proposals FILE   add the identity candidates of this run to FILE (JSON). Each has
+           its own status: DERIVED with a proof (polynomial, checked on a full grid)
+           or PROPOSED (sampled only).
            Entries already in FILE are kept; a candidate with the same lhs, rhs and
            domain is not added twice. Without the flag nothing is written.
 
@@ -90,7 +92,9 @@ def _proposals(rep, argv):
     quiet = "--json" in argv
     if "--proposals" not in argv:
         if found and not quiet:
-            print(f"{len(found)} identity candidate(s), status PROPOSED, not written "
+            print(f"{len(found)} identity candidate(s): "
+                  f"{sum(1 for p in found if p['status'] == 'DERIVED')} DERIVED (proved), "
+                  f"{sum(1 for p in found if p['status'] == 'PROPOSED')} PROPOSED; not written "
                   "(--proposals FILE writes them)")
         return 0
     try:
@@ -120,11 +124,13 @@ def _proposals(rep, argv):
             new.append(p)
     path.write_text(json.dumps({
         "note": "identity candidates from numcheck: UNDECIDED at tolerance 0, the two sides "
-                "agreeing at every sampled point. PROPOSED; no proof attempted.",
-        "status": "PROPOSED", "proposals": old + new}, indent=1) + "\n", encoding="utf-8")
+                "agreeing at every sampled point. Each entry carries its own status: "
+                "DERIVED with a proof, or PROPOSED.",
+        "proposals": old + new}, indent=1) + "\n", encoding="utf-8")
     if not quiet:
-        print(f"{len(new)} new identity candidate(s) -> {path} ({len(old)} kept); PROPOSED, "
-              "no proof attempted")
+        print(f"{len(new)} new identity candidate(s) -> {path} ({len(old)} kept): "
+              f"{sum(1 for p in new if p['status'] == 'DERIVED')} DERIVED, "
+              f"{sum(1 for p in new if p['status'] == 'PROPOSED')} PROPOSED")
     return 0
 
 

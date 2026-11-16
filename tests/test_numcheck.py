@@ -331,8 +331,8 @@ class TestPoint(unittest.TestCase):
         self.assertEqual(p["source_check"], {"input": "checks.json", "index": 3,
                                              "formula": "x*x = x**2",
                                              "source_path": "notes.md:4"})
-        self.assertEqual((p["status"], p["proof"], p["proof_attempted"]),
-                         ("PROPOSED", None, False))
+        self.assertEqual((p["status"], p["proof_attempted"]), ("DERIVED", True))
+        self.assertEqual(p["proof"]["method"], "polynomial_identity_by_points")
         e = p["evidence"]
         self.assertEqual(e["samples_with_difference_exactly_0"], e["sample_points"])
         self.assertIsNone(p["human_interest"])
@@ -343,6 +343,8 @@ class TestPoint(unittest.TestCase):
         self.assertEqual(r["verdict"], "UNDECIDED")
         self.assertEqual(sorted(r["proposal"]["domain"]), ["a", "x"])
         self.assertEqual(r["proposal"]["fixed"], {"b": "3"})
+        self.assertEqual(r["proposal"]["proof"]["degrees"], {"a": 1, "x": 1})
+        self.assertIn("every other symbol at its given value", r["proposal"]["proof"]["scope"])
         # not an identity: equal only at the ends. A piece fails -> no proposal
         r = point("x*x = x**3", "0", x=val([0, 1], "1"))
         self.assertNotEqual(r["verdict"], "UNDECIDED")
@@ -363,6 +365,87 @@ class TestPoint(unittest.TestCase):
         e = r["proposal"]["evidence"]
         self.assertEqual(e["samples_whose_enclosure_contains_0"], e["sample_points"])
         self.assertLess(e["samples_with_difference_exactly_0"], e["sample_points"])
+
+    def test_polynomial_identity_is_proved_by_points(self):
+        # x*x = x**2: degree 2 in x, 3 grid points, difference 0 at each -> DERIVED
+        r = point("x*x = x**2", "0", x=val([0, 1], "m"))
+        p = r["proposal"]
+        self.assertEqual(r["verdict"], "UNDECIDED")           # the check's verdict is not changed
+        self.assertEqual((p["status"], p["proof_attempted"], p["why_not_proved"]),
+                         ("DERIVED", True, None))
+        pr = p["proof"]
+        self.assertEqual((pr["method"], pr["degrees"], pr["grid_size"]),
+                         ("polynomial_identity_by_points", {"x": 2}, 3))
+        self.assertEqual(pr["grid_points_per_variable"], {"x": 3})
+        self.assertEqual(pr["grid"], {"x": ["0", "1/2", "1"]})
+        self.assertEqual(pr["difference_at_every_grid_point"], "0")
+        # two variables: degrees 2 and 2, a full 3 x 3 grid
+        r = point("(x+y)**2 = x*x + 2*x*y + y*y", "0", x=val([0, 1], "m"), y=val([-1, 2], "m"))
+        pr = r["proposal"]["proof"]
+        self.assertEqual(r["proposal"]["status"], "DERIVED")
+        self.assertEqual((pr["degrees"], pr["grid_size"]), ({"x": 2, "y": 2}, 9))
+        self.assertEqual(len(pr["grid"]["x"]), 3)
+        self.assertEqual(len(set(pr["grid"]["y"])), 3)         # distinct points
+        # not an identity: a piece fails, so it never becomes a candidate
+        r = point("x*x = x**3", "0", x=val([0, 1], "1"))
+        self.assertIsNone(r["proposal"])
+        self.assertEqual(r["verdict"], "FAILS")
+        # non-polynomial: unchanged, PROPOSED with sampling as evidence
+        r = point("sqrt(x)**2 = x", "0", x=val([1, 2], "m**2"))
+        p = r["proposal"]
+        self.assertEqual((p["status"], p["proof"], p["proof_attempted"]),
+                         ("PROPOSED", None, False))
+        self.assertEqual(p["polynomial"]["polynomial"], False)
+        self.assertEqual(p["why_not_proved"], "non_polynomial: the function sqrt")
+        self.assertGreater(p["evidence"]["sample_points"], 0)
+        r = point("x/x = 1", "0", x=val([1, 2], "1"))
+        self.assertEqual(r["proposal"]["status"], "PROPOSED")
+        self.assertIn("divisor", r["proposal"]["why_not_proved"])
+
+    def test_grid_too_large_stays_proposed(self):
+        r = point("x**60*y**60*z**60 = (x*y*z)**60", "0", x=val([1, 2], "1"),
+                  y=val([1, 2], "1"), z=val([1, 2], "1"))
+        p = r["proposal"]
+        self.assertEqual((p["status"], p["proof"], p["proof_attempted"]),
+                         ("PROPOSED", None, False))
+        self.assertEqual(p["polynomial"]["grid_size"], 61 ** 3)
+        self.assertEqual(p["why_not_proved"], "grid too large: 226981 points > 10000")
+        # just under the cap: 100 x 100 points, proved
+        r = point("x**99*y**99 = (x*y)**99", "0", x=val([1, 2], "1"), y=val([1, 2], "1"))
+        self.assertEqual(r["proposal"]["status"], "DERIVED")
+        self.assertEqual(r["proposal"]["proof"]["grid_size"], 10000)
+
+    def test_a_false_polynomial_identity_is_not_proved(self):
+        # agrees with x*x at the 7 sample points' worth of evidence? No: the grid or the
+        # samples catch it. A polynomial that is 0 at 0, 1/2 and 1 but not identically:
+        from numcheck.check import _polynomial_proof, _parse, _Differs
+        from numcheck import Interval
+        sides = _parse("x*(x - 1/2)*(x - 1) = 0*x")
+        with self.assertRaises(_Differs):          # degree 3 -> 4 grid points, one is 1/3
+            _polynomial_proof(sides, {"x": Interval(0, 1)}, ["x"], 30)
+        r = point("x*(x - 1/2)*(x - 1) = 0*x", "0", x=val([0, 1], "1"))
+        self.assertIsNone(r["proposal"])
+
+    def test_degree_bounds(self):
+        import ast
+        from numcheck.poly import NonPolynomial, degrees
+
+        def deg(text, variables=("x", "y")):
+            return degrees(ast.parse(text, mode="eval").body, text, set(variables))
+        self.assertEqual(deg("3"), {})
+        self.assertEqual(deg("x"), {"x": 1})
+        self.assertEqual(deg("k*x"), {"x": 1})                # k is not a variable here
+        self.assertEqual(deg("x*x + y"), {"x": 2, "y": 1})
+        self.assertEqual(deg("(x + y)**3"), {"x": 3, "y": 3})
+        self.assertEqual(deg("x**2*y - x/4 + 0.5"), {"x": 2, "y": 1})
+        self.assertEqual(deg("x/(k + 1)"), {"x": 1})          # divisor holds no variable
+        self.assertEqual(deg("x*x - x**2"), {"x": 2})         # a bound: the true degree is lower
+        self.assertEqual(deg("-x**0"), {"x": 0})
+        self.assertEqual(deg("2**3*x"), {"x": 1})
+        for bad in ("sqrt(x)", "x/y", "x**-1", "x**(1/2)", "x**k", "sin(k)", "2**(1/2)*x",
+                    "x if y else 1"):
+            with self.assertRaises(NonPolynomial, msg=bad):
+                deg(bad)
 
     def test_slots(self):
         r = check_point({"formula": "y = x", "values": {"y": val(1, "m"), "x": val(1, "m")},
@@ -509,11 +592,12 @@ class TestCli(unittest.TestCase):
             self.assertFalse(out.exists())
             self.assertEqual(self.cli("check", str(f), "--proposals", str(out)).returncode, 3)
             data = json.loads(out.read_text())
-            self.assertEqual(data["status"], "PROPOSED")
+            self.assertNotIn("status", data)             # each entry carries its own
             self.assertEqual(len(data["proposals"]), 1)
             p = data["proposals"][0]
             self.assertEqual((p["lhs"], p["rhs"], p["status"], p["proof_attempted"]),
-                             ("x*x", "x**2", "PROPOSED", False))
+                             ("x*x", "x**2", "DERIVED", True))
+            self.assertEqual(p["proof"]["grid_size"], 3)
             self.assertEqual(p["source_check"]["source_path"], "notes.md:9")
             self.assertEqual(p["source_check"]["index"], 0)
             self.cli("check", str(f), "--proposals", str(out))        # again: not added twice
@@ -522,6 +606,12 @@ class TestCli(unittest.TestCase):
             self.cli("check", str(f), "--proposals", str(out))        # a new one: appended
             got = json.loads(out.read_text())["proposals"]
             self.assertEqual([p["lhs"] for p in got], ["x*x", "(x + x)*x"])
+            nonpoly = {"formula": "sqrt(x)**2 = x", "values": {"x": val([1, 2], "m**2")}}
+            f.write_text(json.dumps([nonpoly]))
+            r = self.cli("check", str(f), "--proposals", str(out))
+            self.assertIn("0 DERIVED, 1 PROPOSED", r.stdout)
+            got = json.loads(out.read_text())["proposals"]
+            self.assertEqual([p["status"] for p in got], ["DERIVED", "DERIVED", "PROPOSED"])
             out.write_text("not json")                                 # never overwritten blind
             self.assertEqual(self.cli("check", str(f), "--proposals", str(out)).returncode, 2)
             self.assertEqual(out.read_text(), "not json")

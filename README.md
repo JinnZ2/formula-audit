@@ -154,7 +154,12 @@ checks.json --> branch 1 on the formula ---- not PASS ----> VOID (with branch 1'
         else                                   -> UNDECIDED
                       |  UNDECIDED at tolerance 0, nothing against it, and the two
                       v  sides agree at every sampled exact point?
-      identity candidate -> "proposal" on the record, status PROPOSED, no proof
+      identity candidate -> "proposal" on the record
+                      |  lhs - rhs a polynomial in the interval inputs (+ - *, integer
+                      v  powers, rational constants), degree bound d_i per variable?
+      0 at every point of a full grid of (d_i + 1) exact values per variable
+        -> proof "polynomial_identity_by_points", proposal status DERIVED
+      not a polynomial, or grid > 10^4 points -> stays PROPOSED, reason logged
 
         HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside
         MIXED  holds on part of the given values, fails on another part
@@ -186,9 +191,14 @@ intersection  two formulas and a box, bisected along the widest side; every subb
 MIXED         a statement about the given ranges: true on part, false on part. It is
               not a failure of the formula and not a pass; exit code 3.
 proposals     --proposals FILE adds this run's identity candidates to FILE: {lhs, rhs,
-              domain, fixed, units, source_check, evidence, status PROPOSED,
-              proof: null}. Existing entries are kept; nothing is written without
-              the flag. A candidate is for a later kernel proof; none is attempted.
+              domain, fixed, units, source_check, evidence, polynomial, status,
+              proof}. Existing entries are kept; nothing is written without the flag.
+              status DERIVED: a polynomial identity, proved by the full-grid check
+              (degrees, grid and grid size on the record). status PROPOSED: sampled
+              only, for a later proof; why_not_proved says why.
+proof scope   a proved polynomial identity holds for ALL values of the interval
+              inputs, not only the given domain; every other symbol is a constant
+              at its given value, so the identity is proved for those values only
 slots         as branch 1: VOID (absent) or UNCHECKED (given, not checked)
 ```
 
@@ -206,8 +216,12 @@ tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x = x**2 o
 FAILS         on interval inputs FAILS can mean "fails on located pieces of the given
               ranges, and no piece holds" (other pieces may still straddle)
 lists         a record lists at most 32 pieces of each kind; the counts are complete
-candidates    an identity candidate rests on 7 to 14 sampled points. That is evidence,
+candidates    a PROPOSED candidate rests on 7 to 14 sampled points. That is evidence,
               not proof: two different functions can agree at all of them
+verdict       a proved identity does not change the check's verdict: the record
+              still reads UNDECIDED (exit 3) beside a DERIVED proposal
+degree        read from the ast as an upper bound, nothing is expanded; a polynomial
+              written with a function or a variable divisor (x*x/x) is non_polynomial
 intervals     inputs given as intervals are treated as independent ranges
 ONE_FAILS     and MIXED need a whole subbox where a formula fails; a failure at single
               points only reads UNDECIDED
