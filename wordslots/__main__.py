@@ -4,7 +4,7 @@
                  wordslots/places.json)
 
 Exit: 0 every claim PASS | 1 at least one FAIL
-      3 no FAIL, at least one VOID or UNDECIDED | 2 usage or unreadable input
+      3 no FAIL, at least one DEGRADED, VOID or UNDECIDED | 2 usage or unreadable input
 """
 import json
 import sys
@@ -36,22 +36,28 @@ def main(argv):
             line = f"{r['verdict']:9s} {r['word']!s:6s}"
             if r["slots"]:
                 line += " " + " ".join(
-                    f"{s['name']}={'VOID' if s['slot_state'] == 'VOID' else 'filled'}"
+                    f"{s['name']}={s['slot_state'].lower() if s['slot_state'] != 'VOID' else 'VOID'}"
                     for s in r["slots"])
             if r["verdict"] == "VOID":
                 line += f" | {r['void_reason']}"
-            elif r["located_error"]:
+            elif r["verdict"] == "DEGRADED":
+                line += " | missing: " + "; ".join(
+                    f"{m['name']} ({m['reason']})" for m in r["degraded"]["missing"]) \
+                    + " | kept: " + (", ".join(r["degraded"]["kept"]) or "nothing")
+            elif r["located_error"] and "range" in r["located_error"]:
                 e = r["located_error"]
                 line += f" | slot {e['slot']} range {e['range']}: {e['rule']}"
             for g in r["ranges"]:
                 line += f" | {g['slot']} {g['range']}: {g['state']}"
             line += (f" | verdict status {r['status']} | claim: {r['evidential'] or 'null'}"
-                     f" -> {r['claim_status'] or 'null'} | table entry "
+                     f" -> {r['claim_status'] or 'null'}"
+                     + (f" ({r['scope']})" if r.get("scope") else "")
+                     + f" | class {r.get('word_class') or 'null'} | table entry "
                      f"{r['table_entry_status'] or 'null'}")
             print(line)
         print(rep["counts"])
     c = rep["counts"]
-    return 1 if c["FAIL"] else (3 if c["VOID"] or c["UNDECIDED"] else 0)
+    return 1 if c["FAIL"] else (3 if c["VOID"] or c["UNDECIDED"] or c["DEGRADED"] else 0)
 
 
 if __name__ == "__main__":

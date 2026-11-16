@@ -1,13 +1,129 @@
-{"note": "example input for wordslots. Claims typed in for the example.",
+{
+ "note": "example input for wordslots. Claims typed in for the example. The four oral-record checks are unnamed here: 'check 1' .. 'check 4' are placeholders.",
  "claims": [
-  {"word": "safe", "slots": {"x1": "the bridge"}, "evidential": "opinion", "source": "example"},
-  {"word": "safe", "slots": {"x1": "the bridge", "x2": "collapse under a 3 t load", "x3": "pedestrians"},
-   "evidential": "hearsay", "source": "a neighbour"},
-  {"word": "warm", "slots": {"x1": "the room", "x2": {"text": "room standard", "value": "295", "unit": "K", "is": "room"}},
-   "evidential": "observed", "source": "thermometer reading"},
-  {"word": "warm", "slots": {"x1": "the room", "x2": {"text": "room standard", "value": "305", "unit": "K", "is": "room"}},
-   "evidential": "observed", "source": "thermometer reading"},
-  {"word": "warm", "slots": {"x1": "the room", "x2": "room standard"}, "evidential": "concluded"},
-  {"word": "cosy", "slots": {"x1": "the room"}},
-  {"word": "safe", "slots": {"x1": "a", "x2": "b", "x3": "c"}, "certainty": "high"}
- ]}
+  {
+   "word": "safe",
+   "slots": {
+    "x1": "the bridge"
+   },
+   "evidential": "opinion",
+   "source": "example"
+  },
+  {
+   "word": "safe",
+   "slots": {
+    "x1": "the bridge",
+    "x2": "collapse under a 3 t load",
+    "x3": "pedestrians"
+   },
+   "evidential": "hearsay",
+   "source": "a neighbour"
+  },
+  {
+   "word": "warm",
+   "slots": {
+    "x1": "the room",
+    "x2": {
+     "text": "room standard",
+     "value": "295",
+     "unit": "K",
+     "is": "room"
+    }
+   },
+   "evidential": "observed",
+   "source": "thermometer reading",
+   "reading": "PHYSICAL"
+  },
+  {
+   "word": "warm",
+   "slots": {
+    "x1": "the room",
+    "x2": {
+     "text": "room standard",
+     "value": "305",
+     "unit": "K",
+     "is": "room"
+    }
+   },
+   "evidential": "observed",
+   "source": "thermometer reading",
+   "reading": "PHYSICAL"
+  },
+  {
+   "word": "warm",
+   "slots": {
+    "x1": "the room",
+    "x2": "room standard"
+   },
+   "evidential": "concluded",
+   "reading": "PHYSICAL"
+  },
+  {
+   "word": "cosy",
+   "slots": {
+    "x1": "the room"
+   }
+  },
+  {
+   "word": "safe",
+   "slots": {
+    "x1": "a",
+    "x2": "b",
+    "x3": "c"
+   },
+   "certainty": "high"
+  },
+  {
+   "word": "warm",
+   "slots": {
+    "x1": "the water"
+   },
+   "reading": "PHYSICAL",
+   "evidential": "hearsay",
+   "source": "a sign by the pool"
+  },
+  {
+   "word": "warm",
+   "evidential": "se'o",
+   "speaker": "Ana",
+   "source": "Ana"
+  },
+  {
+   "word": "hostile",
+   "slots": {
+    "x1": "she"
+   },
+   "evidential": "se'o",
+   "speaker": "Ana",
+   "source": "Ana"
+  },
+  {
+   "word": "better",
+   "slots": {
+    "x1": "the new route",
+    "x2": "night drivers",
+    "x3": "hours of rest kept"
+   },
+   "evidential": "ka'u",
+   "oral_record": [
+    {
+     "name": "check 1",
+     "met": "y"
+    },
+    {
+     "name": "check 2",
+     "met": "y"
+    },
+    {
+     "name": "check 3",
+     "met": "y"
+    },
+    {
+     "name": "check 4",
+     "met": "y"
+    }
+   ],
+   "source": "told by the carrier"
+  }
+ ]
+}

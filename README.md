@@ -8,8 +8,8 @@ only. Branch 2b (data points and intersections) is implemented and passes its
 own tests within tested scope; only its interval tier is rigorous. The seam
 from 2b's proposals to the 2a kernel is implemented, with no proof search and a
 hand-written axiom file audited by one reader (second reader: VOID). Branch 4
-(word slots) and branch 5 (inference ladder) are implemented and pass their own
-tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
+(word slots, v1 with a DEGRADED verdict) and branch 5 (inference ladder) are
+implemented and pass their own tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
 case uses constructed numbers. Branch 4's
 shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
 is implemented as a v0 that passes its own tests within tested scope; its tool
@@ -555,54 +555,88 @@ tools          four, chosen to touch branches 1, 2b and 4; branch 2a and branch 
 ## Branch 4: word slots
 
 A word claims nothing until its places are filled: "safe" is safe from what,
-for whom.
+for whom. v1.
 
 ```text
-places.json   word -> ordered slots (name, role, required, status tag, optional bounds)
-              warm: x1 what is warm, x2 by standard
-              safe: x1 what is safe, x2 from threat, x3 for whom
-claims.json   fixed record: word, slots, evidential, source, source_path, table
+places.json   word -> ordered slots (name, role, required, status tag, optional bounds),
+              class (JUDGMENT / COMPARATIVE / EMOTIVE / FEAR, or null), shape
+              warm: x1 what is warm, x2 by standard                      EMOTIVE  (glare)
+              safe: x1 what is safe, x2 from threat, x3 for whom         FEAR     (snura)
+              more / less / efficient: x1, x2 than what, x3 in what      COMPARATIVE (zmadu)
+                   property, x4 by what amount (optional)
+              better / appropriate: x1, x2 for whom, x3 by standard      JUDGMENT (xamgu)
+claims.json   fixed record with declared widths: word, slots, reading, magnitude,
+              evidential, speaker, oral_record, source, source_path, table
                       |
-        undeclared field / slot ---> VOID          unknown word ---> VOID
-        a required slot empty   ---> VOID, each empty slot named
+   unknown word / undeclared field or slot / bad tag     ---> VOID
+   a value longer than its width, a number past S9(7)V9(4) ---> VOID ("would truncate")
                       |
-        a filled slot with numeric bounds and a value ---> branch 2b (units first)
+   something required is missing (a slot, the reading of an EMOTIVE word, a magnitude)
+        ---> DEGRADED: what is filled is kept and usable; each missing item listed
+             with name, reason, provenance. Not a PASS; pass_equivalent: false.
                       |
-   PASS  slots filled, bounds hold     FAIL  a value outside its bounds (slot located)
-   UNDECIDED  a value straddles its bounds     VOID  as above; never PASS
+   a filled slot with numeric bounds and a value ---> branch 2b (units first)
+                      |
+   PASS  nothing missing, bounds hold     FAIL  a value outside its bounds (slot located)
+   UNDECIDED  a value straddles its bounds
 ```
 
 ```sh
 python3 -m wordslots check claims.json [--table places.json] [--json]
-# exit 0 all PASS | 1 any FAIL | 3 VOID or UNDECIDED, no FAIL | 2 usage
+# exit 0 all PASS | 1 any FAIL | 3 DEGRADED, VOID or UNDECIDED, no FAIL | 2 usage
 ```
 
 ```text
 evidential    how the claimant knows, mapped to the claim's own status and carried:
               observed -> OBSERVED   concluded -> DERIVED   hearsay, opinion -> PROPOSED
               defined -> OBSERVED (given input, like an axiom in branch 2a)
+              ja'o -> DERIVED
+              se'o -> OBSERVED, scope "speaker's own state only": x1 is filled with the
+                      speaker and the other places are waived. se'o on anything
+                      external -> DEGRADED.
+              ka'u -> CARRIED when all four oral-record checks are met; any "n", or no
+                      oral_record -> PROPOSED
               none given -> null. A PASS never upgrades it.
 status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
               table_entry_status is the place-table entry's, PROPOSED until the
               holder of the word confirms it; the checker never changes a tag.
+emotive       an EMOTIVE word needs its reading, PHYSICAL or SOCIAL; a PHYSICAL
+              reading of "warm" needs a magnitude with its unit
+widths        word X(20), slot text X(40), reading X(8), unit X(12), evidential X(10),
+              speaker X(40), source X(40), source_path X(80); magnitude S9(7)V9(4).
+              Nothing is ever cut to fit.
 ranges        "bounds" {lo, hi, unit} on a slot, and named "ranges" (a name standing
               for a range of values, as a COBOL 88 level does); a filling's "is"
-              names the range it claims. No numeric value given -> UNCHECKED.
-void slots    kept on the record with slot_state VOID, never dropped
+              names the range it claims. The value checked is the filling's, or the
+              claim's magnitude. No numeric value given -> UNCHECKED.
+void slots    kept on the record with slot_state VOID (or WAIVED under se'o), never dropped
+order         when several apply: VOID, then FAIL, then DEGRADED, then UNDECIDED
 ```
 
 Limits of branch 4
 
 ```text
-PASS            the claim is well-formed: its required places are filled and any
+PASS            the claim is well-formed: nothing required is missing and any
                 checked bound holds. It does not say the claim is true.
-table           the shipped places.json is an example written here, all PROPOSED;
-                no holder has confirmed any entry
+table           the shipped places.json is an example written here, all PROPOSED,
+                holder null; no holder has confirmed any entry
+Lojban          the shapes (glare, snura, jibni, zmadu, xamgu) and the meanings of
+                se'o, ja'o and ka'u are recalled, not checked against a Lojban source:
+                the reference pages could not be reached from the build. CARRIED.
+oral record     the checker asks for exactly four named checks, each y / n. WHICH four
+                checks make the discriminator row was not given to this build: the
+                names are whatever the claim supplies. That slot is unnamed here.
+self-report     "the speaker" is matched by text: x1 empty, or "I" / "me" / "myself",
+                or the speaker's name. Nothing checks that a se'o claim really is
+                about an inner state.
 fillings        text is not read: "x2: nothing" counts as filled
 UNCHECKED       a bound with no numeric value is not checked and the claim can still
                 PASS; the record says UNCHECKED
+evidential      X(10), not the X(4) of a Lojban cmavo, because the English evidential
+                words of v0 are kept
 defined         its map to OBSERVED is a choice made here, not given in the order
-not built       claims with more than one word, nesting, negation
+not built       quantity kind (measured / capability / knowledge / intent), ancestry
+                tags, claims with more than one word, nesting, negation
 ```
 
 ## Branch 5: inference ladder

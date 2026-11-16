@@ -1,21 +1,263 @@
-{"note": "place table: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag.",
+{
+ "note": "place table v1: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. The Lojban shapes named in 'shape' (glare, snura, jibni, zmadu, xamgu) are recalled, not checked against a Lojban source: CARRIED.",
  "holder": null,
  "words": {
-  "warm": {"status": "PROPOSED", "slots": [
-    {"name": "x1", "role": "what is warm", "required": true, "status": "PROPOSED"},
-    {"name": "x2", "role": "by standard", "required": true, "status": "PROPOSED",
-     "ranges": {"room": {"lo": "291", "hi": "299", "unit": "K"},
-                "body": {"lo": "309", "hi": "311", "unit": "K"}}}
-  ]},
-  "safe": {"status": "PROPOSED", "slots": [
-    {"name": "x1", "role": "what is safe", "required": true, "status": "PROPOSED"},
-    {"name": "x2", "role": "from threat", "required": true, "status": "PROPOSED"},
-    {"name": "x3", "role": "for whom", "required": true, "status": "PROPOSED"}
-  ]},
-  "near": {"status": "PROPOSED", "slots": [
-    {"name": "x1", "role": "what is near", "required": true, "status": "PROPOSED"},
-    {"name": "x2", "role": "to what", "required": true, "status": "PROPOSED"},
-    {"name": "x3", "role": "at distance", "required": false, "status": "PROPOSED",
-     "bounds": {"lo": "0", "hi": "100", "unit": "m"}}
-  ]}
- }}
+  "warm": {
+   "status": "PROPOSED",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is warm",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "by standard",
+     "required": true,
+     "status": "PROPOSED",
+     "ranges": {
+      "room": {
+       "lo": "291",
+       "hi": "299",
+       "unit": "K"
+      },
+      "body": {
+       "lo": "309",
+       "hi": "311",
+       "unit": "K"
+      }
+     }
+    }
+   ],
+   "class": "EMOTIVE",
+   "shape": "glare",
+   "magnitude_required_for": [
+    "PHYSICAL"
+   ]
+  },
+  "safe": {
+   "status": "PROPOSED",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is safe",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "from threat",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "for whom",
+     "required": true,
+     "status": "PROPOSED"
+    }
+   ],
+   "class": "FEAR",
+   "shape": "snura"
+  },
+  "near": {
+   "status": "PROPOSED",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is near",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "to what",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "at distance",
+     "required": false,
+     "status": "PROPOSED",
+     "bounds": {
+      "lo": "0",
+      "hi": "100",
+      "unit": "m"
+     }
+    }
+   ],
+   "class": null,
+   "shape": "jibni"
+  },
+  "hostile": {
+   "status": "PROPOSED",
+   "class": "EMOTIVE",
+   "shape": null,
+   "slots": [
+    {
+     "name": "x1",
+     "role": "who or what is hostile",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "toward whom",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "by what standard",
+     "required": true,
+     "status": "PROPOSED"
+    }
+   ]
+  },
+  "more": {
+   "status": "PROPOSED",
+   "class": "COMPARATIVE",
+   "shape": "zmadu",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is more",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "than what",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "in what property or quantity",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x4",
+     "role": "by what amount",
+     "required": false,
+     "status": "PROPOSED"
+    }
+   ]
+  },
+  "less": {
+   "status": "PROPOSED",
+   "class": "COMPARATIVE",
+   "shape": "zmadu",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is less",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "than what",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "in what property or quantity",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x4",
+     "role": "by what amount",
+     "required": false,
+     "status": "PROPOSED"
+    }
+   ]
+  },
+  "efficient": {
+   "status": "PROPOSED",
+   "class": "COMPARATIVE",
+   "shape": "zmadu",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is efficient",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "than what",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "in what property or quantity",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x4",
+     "role": "by what amount",
+     "required": false,
+     "status": "PROPOSED"
+    }
+   ]
+  },
+  "better": {
+   "status": "PROPOSED",
+   "class": "JUDGMENT",
+   "shape": "xamgu",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is better",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "for whom",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "by what standard",
+     "required": true,
+     "status": "PROPOSED"
+    }
+   ]
+  },
+  "appropriate": {
+   "status": "PROPOSED",
+   "class": "JUDGMENT",
+   "shape": "xamgu",
+   "slots": [
+    {
+     "name": "x1",
+     "role": "what is appropriate",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x2",
+     "role": "for whom",
+     "required": true,
+     "status": "PROPOSED"
+    },
+    {
+     "name": "x3",
+     "role": "by what standard",
+     "required": true,
+     "status": "PROPOSED"
+    }
+   ]
+  }
+ }
+}
