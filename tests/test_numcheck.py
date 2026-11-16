@@ -211,26 +211,38 @@ class TestPoint(unittest.TestCase):
         self.assertEqual((r["verdict"], r["tiers"][0]["outcome"]),
                          ("HOLDS", "too close to call"))
 
-    def test_straddle_goes_to_bisection(self):
+    def test_straddle_goes_to_bisection_mixed(self):
         kw = dict(x=val(["9.8", "10.4"], "m"), v=val(2, "m/s"))
         r = point("x = v*t", "0.5", t=val(["4.9", "5.1"], "s"), **kw)
         self.assertEqual([t["outcome"] for t in r["tiers"][:2]], ["skipped", "skipped"])
         self.assertEqual((r["intervals"]["difference"]["lo"], r["intervals"]["difference"]["hi"]),
                          ("-2/5", "3/5"))                           # the first look straddles
-        # a whole piece of the inputs fails: FAILS, located (it holds on other pieces)
-        self.assertEqual((r["verdict"], r["status"], r["rigorous"]), ("FAILS", "DERIVED", True))
-        loc = r["located"]
-        self.assertEqual(sorted(loc["subbox"]), ["t", "x"])
-        self.assertGreater(F(loc["difference"]["lo"]), F(1, 2))     # outside the tolerance
-        self.assertTrue(r["bisection"]["holds_elsewhere"])
-        self.assertEqual(sorted(r["bisection"]["variables_split"]), ["t", "x"])
+        # it holds on some pieces of the given values and fails on others: MIXED
+        self.assertEqual((r["verdict"], r["status"], r["rigorous"]), ("MIXED", "DERIVED", True))
+        b = r["bisection"]
+        self.assertGreater(b["hold"], 0)
+        self.assertGreater(b["fail"], 0)
+        self.assertEqual(len(b["pieces_that_hold"]), b["hold"])     # under the list cap: all
+        self.assertEqual(len(b["pieces_that_fail"]), b["fail"])
+        for piece in b["pieces_that_fail"]:                          # each wholly outside
+            self.assertGreater(F(piece["difference"]["lo"]), F(1, 2))
+            self.assertEqual(sorted(piece["subbox"]), ["t", "x"])
+        for piece in b["pieces_that_hold"]:                          # each wholly inside
+            self.assertLessEqual(F(piece["difference"]["hi"]), F(1, 2))
+            self.assertGreaterEqual(F(piece["difference"]["lo"]), F(-1, 2))
+        self.assertEqual(r["located"], b["pieces_that_fail"][0])
+        self.assertIsNone(r["proposal"])
         r = point("x = v*t", "0.7", t=val(["4.9", "5.1"], "s"), **kw)
         self.assertEqual(r["verdict"], "HOLDS")
         self.assertIsNone(r["bisection"])                           # decided without it
-        self.assertIsNone(r["located"])
         r = point("x = v*t", "0.1", t=val(["5.3", "5.4"], "s"), **kw)
         self.assertEqual(r["verdict"], "FAILS")
         self.assertIsNone(r["bisection"])                           # fails everywhere
+        # pieces that fail and none that hold: FAILS, located
+        r = point("y = x", "0", y=val([0, 2], "m"), x=val(1, "m"))
+        self.assertEqual(r["verdict"], "FAILS")
+        self.assertEqual((r["bisection"]["hold"], r["bisection"]["fail"] > 0), (0, True))
+        self.assertIsNotNone(r["located"])
 
     def test_undecided_after_bisection(self):
         r = check_point({"formula": "x*x = x**2", "tolerance": "0.05", "depth": 2,
@@ -246,6 +258,7 @@ class TestPoint(unittest.TestCase):
         self.assertEqual((r["verdict"], r["rigorous"]), ("UNDECIDED", True))
         self.assertEqual(r["bisection"]["hold"], 0)
         self.assertEqual(r["bisection"]["straddle_at_depth_limit"], 2 ** 8)
+        self.assertIsNotNone(r["proposal"])
         # any tolerance above the piece width: HOLDS via bisection
         r = point("x*x = x**2", "0.05", **kw)
         self.assertEqual(r["intervals"]["difference"]["lo"], "-1")      # the first look
@@ -253,6 +266,7 @@ class TestPoint(unittest.TestCase):
         b = r["bisection"]
         self.assertEqual((b["straddle_at_depth_limit"], b["located"]), (0, None))
         self.assertGreater(b["hold"], 1)
+        self.assertIsNone(r["proposal"])                    # decided: nothing to propose
         # at a point the two sides are the same number: HOLDS at tolerance 0
         r = point("x*x = x**2", "0", x=val("0.3", "m"))
         self.assertEqual((r["verdict"], r["precision"]), ("HOLDS", "exact"))
@@ -306,6 +320,50 @@ class TestPoint(unittest.TestCase):
                                x=val([-1, 4], "m**2"))["verdict"], "VOID")
         self.assertEqual(check_point("y = x")["verdict"], "VOID")
 
+    def test_identity_candidate_is_proposed_not_proved(self):
+        r = check_point({"formula": "x*x = x**2", "tolerance": 0, "source_path": "notes.md:4",
+                         "values": {"x": val([0, 1], "m", "OBSERVED")}}, index=3,
+                        input_path="checks.json")
+        p = r["proposal"]
+        self.assertEqual(r["verdict"], "UNDECIDED")              # the verdict does not change
+        self.assertEqual((p["lhs"], p["rhs"]), ("x*x", "x**2"))
+        self.assertEqual(p["domain"], {"x": {"lo": "0", "hi": "1"}})
+        self.assertEqual(p["source_check"], {"input": "checks.json", "index": 3,
+                                             "formula": "x*x = x**2",
+                                             "source_path": "notes.md:4"})
+        self.assertEqual((p["status"], p["proof"], p["proof_attempted"]),
+                         ("PROPOSED", None, False))
+        e = p["evidence"]
+        self.assertEqual(e["samples_with_difference_exactly_0"], e["sample_points"])
+        self.assertIsNone(p["human_interest"])
+        self.assertIsNone(p["ai_interest"])
+        # two variables, one held fixed
+        r = point("(a + b)*x = a*x + b*x", "0", a=val([0, 1], "1"), b=val(3, "1"),
+                  x=val([-2, 2], "m"))
+        self.assertEqual(r["verdict"], "UNDECIDED")
+        self.assertEqual(sorted(r["proposal"]["domain"]), ["a", "x"])
+        self.assertEqual(r["proposal"]["fixed"], {"b": "3"})
+        # not an identity: equal only at the ends. A piece fails -> no proposal
+        r = point("x*x = x**3", "0", x=val([0, 1], "1"))
+        self.assertNotEqual(r["verdict"], "UNDECIDED")
+        self.assertIsNone(r["proposal"])
+        # undecided, but the sides differ at a sampled point: no proposal
+        r = check_point({"formula": "x*x = x**2 + e", "tolerance": 0, "depth": 1,
+                         "values": {"x": val([0, 1], "1"), "e": val("0.001", "1")}})
+        self.assertEqual(r["verdict"], "UNDECIDED")
+        self.assertIsNone(r["proposal"])
+        # a tolerance above 0 is not an identity claim: no proposal
+        r = check_point({"formula": "x*x = x**2", "tolerance": "0.001", "depth": 2,
+                         "values": {"x": val([0, 1], "1")}})
+        self.assertEqual(r["verdict"], "UNDECIDED")
+        self.assertIsNone(r["proposal"])
+        # with an enclosure function: sampled differences contain 0 without being exact
+        r = point("sqrt(x)*sqrt(x) = x", "0", x=val([1, 2], "m**2"))
+        self.assertEqual(r["verdict"], "UNDECIDED")
+        e = r["proposal"]["evidence"]
+        self.assertEqual(e["samples_whose_enclosure_contains_0"], e["sample_points"])
+        self.assertLess(e["samples_with_difference_exactly_0"], e["sample_points"])
+
     def test_slots(self):
         r = check_point({"formula": "y = x", "values": {"y": val(1, "m"), "x": val(1, "m")},
                          "slots": {"sign": "+"}})
@@ -332,12 +390,32 @@ class TestIntersection(unittest.TestCase):
         self.assertTrue(r["inputs"]["x"]["from_region"])
 
     def test_one_fails_located(self):
-        r = inter("y = k*x - k*x + y", "0.1", "x = c", "0.1", {"x": [0, 1]}, **self.base)
-        self.assertEqual(r["verdict"], "ONE_FAILS")
+        # formula 2 fails everywhere on the box; nowhere do both hold
+        r = inter("y = k*x - k*x + y", "0.1", "x = c", "0.1", {"x": [0, 1]},
+                  **dict(self.base, c=val(5, "m")))
+        self.assertEqual((r["verdict"], r["status"]), ("ONE_FAILS", "DERIVED"))
         loc = r["located"]
-        self.assertEqual((loc["formula_number"], loc["formula"]), (2, "x = c"))
-        self.assertEqual((loc["subbox"]["x"]["lo"], loc["subbox"]["x"]["hi"]), ("0", "1/4"))
-        self.assertEqual(loc["depth"], 2)
+        self.assertEqual((loc["formula_number"], loc["formula"], loc["depth"]), (2, "x = c", 0))
+        self.assertEqual((loc["subbox"]["x"]["lo"], loc["subbox"]["x"]["hi"]), ("0", "1"))
+        self.assertEqual(r["subboxes"]["both_hold"], 0)
+
+    def test_mixed(self):
+        # x = 0.5 within 0.1 holds near the middle of [0, 1] and fails towards the ends
+        r = inter("y = k*x - k*x + y", "0.1", "x = c", "0.1", {"x": [0, 1]}, **self.base)
+        self.assertEqual((r["verdict"], r["status"], r["rigorous"]), ("MIXED", "DERIVED", True))
+        s = r["subboxes"]
+        self.assertGreater(s["both_hold"], 0)
+        self.assertGreater(s["one_fails"], 0)
+        self.assertEqual(len(r["subboxes_where_both_hold"]), s["both_hold"])
+        self.assertEqual(len(r["subboxes_where_one_fails"]), s["one_fails"])
+        for f in r["subboxes_where_one_fails"]:
+            self.assertEqual(f["formula_number"], 2)
+            lo, hi = F(f["subbox"]["x"]["lo"]), F(f["subbox"]["x"]["hi"])
+            self.assertTrue(hi < F(4, 10) or lo > F(6, 10))          # outside 0.5 +- 0.1
+        for h in r["subboxes_where_both_hold"]:
+            lo, hi = F(h["subbox"]["x"]["lo"]), F(h["subbox"]["x"]["hi"])
+            self.assertTrue(F(4, 10) <= lo and hi <= F(6, 10))       # inside it
+        self.assertEqual(r["located"], r["subboxes_where_one_fails"][0])
 
     def test_undecided_at_depth_limit(self):
         r = inter("y = k*x - k*x + y", "0.1", "x*x = x**2", "0.1", {"x": [0, 1]}, depth=1,
@@ -361,6 +439,7 @@ class TestIntersection(unittest.TestCase):
         r = inter("y = c/x", "1", "x = x", "2", {"x": [-1, 1]}, depth=3,
                   x={"unit": "1"}, y=val(3, "m"), c=val("0.5", "m"))
         self.assertEqual(r["verdict"], "ONE_FAILS")
+        self.assertGreater(r["subboxes"]["no_value_at_depth_limit"], 0)   # counted, not hidden
         r = inter("y = k*x", "1", "x = y*y", "1", {"x": [0, 1]}, **self.base)   # units FAIL
         self.assertEqual(r["verdict"], "VOID")
         self.assertIn("formula 2: units FAIL", r["void_reason"])
@@ -383,8 +462,8 @@ class TestCli(unittest.TestCase):
         r = self.cli("check", "checks.json", "--json")
         self.assertEqual(r.returncode, 1)
         self.assertEqual(json.loads(r.stdout)["counts"],
-                         {"HOLDS": 2, "FAILS": 2, "UNDECIDED": 0, "VOID": 2, "BOTH_HOLD": 0,
-                          "ONE_FAILS": 1})
+                         {"HOLDS": 2, "FAILS": 1, "MIXED": 2, "UNDECIDED": 0, "VOID": 2,
+                          "BOTH_HOLD": 0, "ONE_FAILS": 0})
         self.assertEqual(json.loads(r.stdout)["triage"]["mismatches"], 0)
         self.assertEqual(self.cli().returncode, 2)
         self.assertEqual(self.cli("check", "nope.json").returncode, 2)
@@ -397,7 +476,15 @@ class TestCli(unittest.TestCase):
             self.assertEqual(self.cli("check", str(f)).returncode, 0)
             f.write_text(json.dumps([ok, und]))
             self.assertEqual(self.cli("check", str(f)).returncode, 3)
-            f.write_text(json.dumps([ok, part]))          # fails on part of y's range
+            f.write_text(json.dumps([ok, part]))          # fails on pieces, holds on none
+            self.assertEqual(self.cli("check", str(f)).returncode, 1)
+            mixed = {"formula": "y = x", "tolerance": "0.5",
+                     "values": {"y": val([0, 2], "m"), "x": val(1, "m")}}
+            f.write_text(json.dumps([ok, mixed]))         # MIXED exits like UNDECIDED
+            r = self.cli("check", str(f), "--json")
+            self.assertEqual(json.loads(r.stdout)["counts"]["MIXED"], 1)
+            self.assertEqual(r.returncode, 3)
+            f.write_text(json.dumps([ok, mixed, part]))   # a FAILS still wins
             self.assertEqual(self.cli("check", str(f)).returncode, 1)
             f.write_text(json.dumps([ok, {"kind": "other"}]))
             self.assertEqual(self.cli("check", str(f)).returncode, 3)
@@ -408,6 +495,36 @@ class TestCli(unittest.TestCase):
             self.assertEqual((quick["rigorous"], quick["fast"]), (True, True))   # 1 = 1: too close
         r = json.loads(self.cli("check", "checks.json", "--json", "--fast").stdout)["records"][2]
         self.assertEqual((r["deciding_tier"], r["rigorous"]), ("float", False))
+
+    def test_proposals_file(self):
+        und = {"formula": "x*x = x**2", "values": {"x": val([0, 1], "m")},
+               "source_path": "notes.md:9"}
+        other = {"formula": "(x + x)*x = 2*x*x", "values": {"x": val([1, 3], "m")}}
+        with tempfile.TemporaryDirectory() as d:
+            f, out = Path(d) / "c.json", Path(d) / "proposals.json"
+            f.write_text(json.dumps([und]))
+            r = self.cli("check", str(f))                 # no flag: nothing is written
+            self.assertEqual(r.returncode, 3)
+            self.assertIn("not written", r.stdout)
+            self.assertFalse(out.exists())
+            self.assertEqual(self.cli("check", str(f), "--proposals", str(out)).returncode, 3)
+            data = json.loads(out.read_text())
+            self.assertEqual(data["status"], "PROPOSED")
+            self.assertEqual(len(data["proposals"]), 1)
+            p = data["proposals"][0]
+            self.assertEqual((p["lhs"], p["rhs"], p["status"], p["proof_attempted"]),
+                             ("x*x", "x**2", "PROPOSED", False))
+            self.assertEqual(p["source_check"]["source_path"], "notes.md:9")
+            self.assertEqual(p["source_check"]["index"], 0)
+            self.cli("check", str(f), "--proposals", str(out))        # again: not added twice
+            self.assertEqual(len(json.loads(out.read_text())["proposals"]), 1)
+            f.write_text(json.dumps([und, other]))
+            self.cli("check", str(f), "--proposals", str(out))        # a new one: appended
+            got = json.loads(out.read_text())["proposals"]
+            self.assertEqual([p["lhs"] for p in got], ["x*x", "(x + x)*x"])
+            out.write_text("not json")                                 # never overwritten blind
+            self.assertEqual(self.cli("check", str(f), "--proposals", str(out)).returncode, 2)
+            self.assertEqual(out.read_text(), "not json")
 
 
 if __name__ == "__main__":

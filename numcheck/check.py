@@ -25,11 +25,14 @@ then confirmation is skipped, the prediction is the verdict, and the record
 carries rigorous: false.
 
 A straddle on interval inputs is bisected (the inputs are split, widest
-first, to the depth limit) before UNDECIDED is given:
+first, to the depth limit) and every piece is read:
   every piece HOLDS                          -> HOLDS
-  a piece where it fails at every point      -> FAILS, with that piece located
-                                                (it may hold on other pieces)
-  pieces still straddling at the depth limit -> UNDECIDED
+  pieces that HOLD and pieces that FAIL      -> MIXED: both kinds are listed
+  pieces that FAIL, none that hold           -> FAILS, located
+  otherwise                                  -> UNDECIDED
+An UNDECIDED at tolerance 0 with no piece against it, whose two sides agree
+at every sampled exact point, is handed on as a PROPOSED identity (see
+"proposal" on the record). No proof is attempted here.
 
 An intersection: two formulas and a region (a box: an interval per region
 variable). On a subbox, both formulas HOLD (enclosure inside tolerance:
@@ -37,9 +40,13 @@ true at every point of the subbox), or one FAILS (enclosure outside: false
 at every point of it), or the subbox is bisected along its widest side, to
 a depth limit.
   BOTH_HOLD   every subbox reached: both hold
-  ONE_FAILS   a subbox on which one formula fails everywhere (located)
+  MIXED       subboxes where both hold, and subboxes where one fails
+              everywhere (both kinds listed)
+  ONE_FAILS   subboxes where one formula fails everywhere (located), and
+              none where both hold
   UNDECIDED   neither, at the depth limit
-  VOID        as above; or a subbox with no value at the depth limit
+  VOID        as above; or a subbox with no value at the depth limit and no
+              failure found
 """
 import ast
 from decimal import Decimal
@@ -51,9 +58,10 @@ from unitaudit.check import slot_record, split_sides, Void as UnitVoid, STATUS
 from .interval import Interval
 from .tiers import DecSys, FloatSys, IntSys, NumVoid, TierCannot, evaluate
 
-VERSION = "numcheck branch2b-2"
+VERSION = "numcheck branch2b-3"
 DEFAULTS = {"decimal_precision": 50, "precision": 30, "max_precision": 120, "depth": 8}
 MAX_SUBBOXES = 20000
+LIST_CAP = 32        # pieces listed per kind on a record; the counts are complete
 
 
 class Bad(Exception):
@@ -97,7 +105,7 @@ def _blank(kind, entry, index, input_path):
     get = entry.get if isinstance(entry, dict) else (lambda *_: None)
     return {"kind": kind, "verdict": "VOID", "void_reason": None, "status": None,
             "deciding_tier": None, "precision": None, "rigorous": None, "fast": None,
-            "tiers": [], "triage": None, "located": None,
+            "tiers": [], "triage": None, "located": None, "proposal": None,
             "intervals": None, "inputs": None, "units": None,
             "provenance": {"source_path": get("source_path"), "input": input_path,
                            "index": index, "tool": VERSION},
@@ -173,48 +181,106 @@ def _difference(sides, env, S):
 
 def _bisect_point(sides, tol, env, prec, depth_limit):
     """A straddle on interval inputs: split the inputs (widest first) and look
-    again. The enclosure of x*x - x**2 on a wide x is wide only because x is
-    counted twice; on narrow pieces it closes. Returns (verdict or None, detail).
-      a piece on which the formula fails at every point -> FAILS, located
-      every piece HOLDS                                 -> HOLDS
-      pieces still straddling at the depth limit        -> None (UNDECIDED)"""
+    again, on every piece, to the depth limit. Returns (verdict or None, detail).
+      every piece HOLDS                               -> HOLDS
+      pieces that HOLD and pieces that FAIL           -> MIXED (both kinds listed)
+      pieces that FAIL, none that hold                -> FAILS, located
+      otherwise (pieces straddle at the depth limit)  -> None (UNDECIDED)
+    A piece HOLDS / FAILS when the formula does so at every point of it."""
     if depth_limit < 0 or 2 ** depth_limit > MAX_SUBBOXES:
         raise Bad(f"depth must be between 0 and {MAX_SUBBOXES.bit_length() - 1}")
     names = sorted(n for n, v in env.items() if not v.is_point)
     stack = [({n: env[n] for n in names}, 0)]
-    counts = {"examined": 0, "hold": 0, "straddle_at_depth_limit": 0}
-    deepest, first_open, located = 0, None, None
-    while stack and located is None:
+    counts = {"examined": 0, "hold": 0, "fail": 0, "straddle_at_depth_limit": 0}
+    deepest, first_open, holds, fails = 0, None, [], []
+    while stack:
         box, depth = stack.pop()
         counts["examined"] += 1
         deepest = max(deepest, depth)
         _, _, d = _difference(sides, dict(env, **box), IntSys(prec))
         v, _ = IntSys(prec).judge(d, tol)
-        sub = {n: box[n].as_record() for n in names}
+        piece = {"subbox": {n: box[n].as_record() for n in names}, "depth": depth,
+                 "difference": d.as_record()}
         if v == "HOLDS":
             counts["hold"] += 1
+            if len(holds) < LIST_CAP:
+                holds.append(piece)
         elif v == "FAILS":
-            located = {"subbox": sub, "depth": depth, "difference": d.as_record(),
-                       "tolerance": str(tol)}
+            counts["fail"] += 1
+            if len(fails) < LIST_CAP:
+                fails.append(piece)
         elif depth >= depth_limit:
             counts["straddle_at_depth_limit"] += 1
-            first_open = first_open or {"subbox": sub, "difference": d.as_record()}
+            first_open = first_open or piece
         else:
             widest = max(names, key=lambda n: box[n].width)
             a, b = box[widest].split()
             stack.append((dict(box, **{widest: b}), depth + 1))
             stack.append((dict(box, **{widest: a}), depth + 1))
-    verdict = "FAILS" if located else (None if counts["straddle_at_depth_limit"] else "HOLDS")
+    h, f, o = counts["hold"], counts["fail"], counts["straddle_at_depth_limit"]
+    verdict = ("MIXED" if h and f else "FAILS" if f else "HOLDS" if not o else None)
     return verdict, {**counts, "depth_limit": depth_limit, "deepest": deepest,
-                     "variables_split": names,
-                     "stopped_at_first_failure": located is not None,
-                     "holds_elsewhere": bool(located and counts["hold"]),
-                     "reading": ("fails at every point of the located piece of the inputs"
-                                 + ("; holds on other pieces" if located and counts["hold"]
-                                    else "") if located else
-                                 "holds on every piece" if verdict else
-                                 "pieces still straddle at the depth limit"),
-                     "located": located, "first_straddling_piece": first_open}
+                     "variables_split": names, "tolerance": str(tol),
+                     "list_cap": LIST_CAP,
+                     "reading": {"MIXED": "holds on some pieces of the given values and "
+                                          "fails on others",
+                                 "FAILS": "fails at every point of the located pieces; "
+                                          "no piece holds",
+                                 "HOLDS": "holds on every piece",
+                                 None: "pieces still straddle at the depth limit"}[verdict],
+                     "pieces_that_hold": holds, "pieces_that_fail": fails,
+                     "pieces_that_hold_listed": len(holds), "pieces_that_fail_listed": len(fails),
+                     "located": fails[0] if fails else None,
+                     "first_straddling_piece": first_open}
+
+
+def _identity_candidate(entry, sides, tol, env, rec, prec, index, input_path):
+    """tolerance 0, interval inputs, UNDECIDED, and nothing against it: the two
+    sides may be the same function. Sample exact points; if the difference
+    is 0 at every one, hand the pair on as a PROPOSED identity. Nothing is
+    proved here."""
+    b = rec["bisection"]
+    if tol != 0 or b is None or b["hold"] or b["fail"]:
+        return None
+    names = b["variables_split"]
+    fracs = (Fraction(0), Fraction(1), Fraction(1, 2), Fraction(1, 3), Fraction(5, 7),
+             Fraction(2, 11), Fraction(9, 13))
+    points = [{n: env[n].lo + env[n].width * t for n in names} for t in fracs]
+    if len(names) > 1:                      # off the diagonal too
+        for k in range(len(fracs)):
+            points.append({n: env[n].lo + env[n].width * fracs[(k + 2 * i + 1) % len(fracs)]
+                           for i, n in enumerate(names)})
+    exact = contain = void = 0
+    for pt in points:
+        try:
+            _, _, d = _difference(sides, dict(env, **{n: Interval(v) for n, v in pt.items()}),
+                                  IntSys(prec))
+        except NumVoid:
+            void += 1
+            continue
+        if not d.contains(0):
+            return None                      # the two sides differ at a sampled point
+        contain += 1
+        exact += d.is_point
+    if not contain:
+        return None
+    return {"lhs": sides[0][0], "rhs": sides[1][0],
+            "domain": {n: {"lo": str(env[n].lo), "hi": str(env[n].hi)} for n in names},
+            "fixed": {n: str(v.lo) for n, v in sorted(env.items()) if v.is_point},
+            "units": {n: rec["inputs"][n]["unit"] for n in sorted(env)},
+            "source_check": {"input": input_path, "index": index, "formula": rec["formula"],
+                             "source_path": rec["provenance"]["source_path"]},
+            "status": "PROPOSED",
+            "evidence": {"verdict": "UNDECIDED at tolerance 0",
+                         "pieces_straddling_at_depth_limit": b["straddle_at_depth_limit"],
+                         "depth_limit": b["depth_limit"],
+                         "sample_points": len(points),
+                         "samples_with_difference_exactly_0": exact,
+                         "samples_whose_enclosure_contains_0": contain,
+                         "samples_with_no_value": void,
+                         "note": "sampling is evidence, not proof"},
+            "proof": None, "proof_attempted": False,
+            "human_interest": None, "ai_interest": None}
 
 
 def check_point(entry, index=None, input_path=None, fast=False):
@@ -284,6 +350,9 @@ def check_point(entry, index=None, input_path=None, fast=False):
                 verdict, rec["bisection"] = _bisect_point(sides, tol, env, prec,
                                                           int(opt["depth"]))
                 rec["located"] = rec["bisection"]["located"]
+                rec["verdict"] = verdict or "UNDECIDED"
+                rec["proposal"] = _identity_candidate(entry, sides, tol, env, rec, prec,
+                                                      index, input_path)
             rec.update(verdict=verdict or "UNDECIDED", deciding_tier="interval",
                        precision="exact" if exact else prec, rigorous=True, status="DERIVED")
         confirmed = rec["verdict"] if rec["rigorous"] else None
@@ -342,8 +411,10 @@ def check_intersection(entry, index=None, input_path=None):
         stack = [({n: env[n] for n in names}, 0)]
         counts = {"examined": 0, "both_hold": 0, "undecided_at_depth_limit": 0,
                   "no_value_at_depth_limit": 0}
-        located, first_open, first_void, deepest = None, None, None, 0
-        while stack and located is None:
+        first_open, first_void, deepest = None, None, 0
+        holds, fails = [], []
+        counts["one_fails"] = 0
+        while stack:
             box, depth = stack.pop()
             counts["examined"] += 1
             deepest = max(deepest, depth)
@@ -362,12 +433,16 @@ def check_intersection(entry, index=None, input_path=None):
             sub = {n: box[n].as_record() for n in names}
             if "FAILS" in state:
                 i = state.index("FAILS")
-                located = {"subbox": sub, "depth": depth, "formula_number": i + 1,
-                           "formula": rec["formulas"][i], "difference": diffs[i],
-                           "tolerance": str(parsed[i][1]),
-                           "other_formula_on_this_subbox": state[1 - i]}
+                counts["one_fails"] += 1
+                if len(fails) < LIST_CAP:
+                    fails.append({"subbox": sub, "depth": depth, "formula_number": i + 1,
+                                  "formula": rec["formulas"][i], "difference": diffs[i],
+                                  "tolerance": str(parsed[i][1]),
+                                  "other_formula_on_this_subbox": state[1 - i]})
             elif state == ["HOLDS", "HOLDS"]:
                 counts["both_hold"] += 1
+                if len(holds) < LIST_CAP:
+                    holds.append({"subbox": sub, "depth": depth})
             elif depth >= depth_limit:
                 if void_reason:
                     counts["no_value_at_depth_limit"] += 1
@@ -387,13 +462,18 @@ def check_intersection(entry, index=None, input_path=None):
                 a, b = box[widest].split()
                 stack.append((dict(box, **{widest: b}), depth + 1))
                 stack.append((dict(box, **{widest: a}), depth + 1))
+        located = fails[0] if fails else None
         rec["subboxes"] = {**counts, "depth_limit": depth_limit, "deepest": deepest,
-                           "stopped_at_first_failure": located is not None}
+                           "list_cap": LIST_CAP}
         rec["located"] = located
+        rec["subboxes_where_both_hold"] = holds
+        rec["subboxes_where_one_fails"] = fails
         rec["first_undecided_subbox"] = first_open
         rec["first_subbox_with_no_value"] = first_void
         rec.update(deciding_tier="interval", precision=prec, rigorous=True)
-        if located:
+        if located and counts["both_hold"]:
+            rec.update(verdict="MIXED", status="DERIVED")
+        elif located:
             rec.update(verdict="ONE_FAILS", status="DERIVED")
         elif counts["no_value_at_depth_limit"]:
             rec.update(verdict="VOID", status=None,
@@ -425,7 +505,7 @@ def check_all(data, input_path=None, fast=False):
             r = _blank(str(kind), e, i, input_path)
             r["void_reason"] = f"unknown kind {kind!r}"
             records.append(r)
-    names = ("HOLDS", "FAILS", "UNDECIDED", "VOID", "BOTH_HOLD", "ONE_FAILS")
+    names = ("HOLDS", "FAILS", "MIXED", "UNDECIDED", "VOID", "BOTH_HOLD", "ONE_FAILS")
     tri = [r["triage"] for r in records if r.get("triage")]
     return {"tool": VERSION, "input": input_path, "fast": fast,
             "counts": {v: sum(1 for r in records if r["verdict"] == v) for v in names},
@@ -441,4 +521,5 @@ def check_all(data, input_path=None, fast=False):
                                          "predictions": r["triage"]["predictions"]}
                                         for r in records
                                         if r.get("triage") and r["triage"]["mismatches"]]},
+            "proposals": [r["proposal"] for r in records if r.get("proposal")],
             "records": records}

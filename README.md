@@ -147,19 +147,24 @@ checks.json --> branch 1 on the formula ---- not PASS ----> VOID (with branch 1'
                               confirmed; a mismatch is listed and counted.
                       |  straddles, and an input is an interval?
                       v
-      bisect the inputs, widest first, to the depth limit:
-        every piece HOLDS -> HOLDS
-        a piece where it fails at every point -> FAILS, that piece located
-        else -> UNDECIDED
+      bisect the inputs, widest first, to the depth limit; read every piece:
+        every piece HOLDS                      -> HOLDS
+        pieces that HOLD and pieces that FAIL  -> MIXED (both kinds listed)
+        pieces that FAIL, none that hold       -> FAILS, located
+        else                                   -> UNDECIDED
+                      |  UNDECIDED at tolerance 0, nothing against it, and the two
+                      v  sides agree at every sampled exact point?
+      identity candidate -> "proposal" on the record, status PROPOSED, no proof
 
-        HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside (everywhere, or on
-        UNDECIDED  straddles after the above        a located piece of interval inputs)
+        HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside
+        MIXED  holds on part of the given values, fails on another part
+        UNDECIDED  straddles after the above
         VOID  no value on these inputs (division by an interval containing 0, ...)
 ```
 
 ```sh
-python3 -m numcheck check checks.json [--json] [--fast]
-# exit 0 all HOLDS / BOTH_HOLD | 1 any FAILS / ONE_FAILS | 3 VOID or UNDECIDED, none failed | 2 usage
+python3 -m numcheck check checks.json [--json] [--fast] [--proposals proposals.json]
+# exit 0 all HOLDS / BOTH_HOLD | 1 any FAILS / ONE_FAILS | 3 MIXED, UNDECIDED or VOID, none failed | 2 usage
 ```
 
 ```text
@@ -173,9 +178,17 @@ tiers         the interval tier confirms. The record lists every tier with its r
 --fast        (or "fast": true on a check) skips the confirmation when triage gives a
               prediction. Not rigorous: such a record carries rigorous: false.
 status        HOLDS / FAILS / UNDECIDED are DERIVED; VOID has none
-intersection  two formulas and a box. BOTH_HOLD: both hold on every subbox reached.
-              ONE_FAILS: one fails at every point of a located subbox.
-              UNDECIDED: neither at the depth limit. Bisection along the widest side.
+intersection  two formulas and a box, bisected along the widest side; every subbox
+              is read. BOTH_HOLD: both hold on every subbox. MIXED: subboxes where
+              both hold and subboxes where one fails everywhere (both listed).
+              ONE_FAILS: subboxes where one fails, none where both hold.
+              UNDECIDED: neither at the depth limit.
+MIXED         a statement about the given ranges: true on part, false on part. It is
+              not a failure of the formula and not a pass; exit code 3.
+proposals     --proposals FILE adds this run's identity candidates to FILE: {lhs, rhs,
+              domain, fixed, units, source_check, evidence, status PROPOSED,
+              proof: null}. Existing entries are kept; nothing is written without
+              the flag. A candidate is for a later kernel proof; none is attempted.
 slots         as branch 1: VOID (absent) or UNCHECKED (given, not checked)
 ```
 
@@ -190,12 +203,14 @@ tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x = x**2 o
               x in [0, 1] is UNDECIDED at tolerance 0 (the two enclosures differ; the
               dependency problem), since bisection narrows the gap without closing it.
               With a tolerance > 0 it reads HOLDS via bisection, if the depth allows.
-FAILS         on interval inputs FAILS can mean "fails on a located piece of the
-              given ranges" while holding on others; the record says which
-              (located, bisection.holds_elsewhere)
+FAILS         on interval inputs FAILS can mean "fails on located pieces of the given
+              ranges, and no piece holds" (other pieces may still straddle)
+lists         a record lists at most 32 pieces of each kind; the counts are complete
+candidates    an identity candidate rests on 7 to 14 sampled points. That is evidence,
+              not proof: two different functions can agree at all of them
 intervals     inputs given as intervals are treated as independent ranges
-ONE_FAILS     needs a whole subbox where a formula fails; a failure at single points
-              only reads UNDECIDED
+ONE_FAILS     and MIXED need a whole subbox where a formula fails; a failure at single
+              points only reads UNDECIDED
 units         branch 1's blind spots carry over: no scale factors, so values are
               taken to be in the stated units as written (km against m is not seen)
 powers        integer exponents and 1/2 only; exponent must be a literal number

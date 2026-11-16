@@ -1,10 +1,14 @@
-"""python3 -m numcheck check checks.json [--json] [--fast]
+"""python3 -m numcheck check checks.json [--json] [--fast] [--proposals FILE]
 
   --fast   skip the interval confirmation when triage gives a prediction: the
            prediction is the verdict, and the record carries rigorous: false.
 
+  --proposals FILE   add the PROPOSED identity candidates of this run to FILE (JSON).
+           Entries already in FILE are kept; a candidate with the same lhs, rhs and
+           domain is not added twice. Without the flag nothing is written.
+
 Exit: 0 every check HOLDS / BOTH_HOLD | 1 at least one FAILS / ONE_FAILS
-      3 none failed, at least one VOID or UNDECIDED | 2 usage or unreadable input
+      3 none failed, at least one MIXED, UNDECIDED or VOID | 2 usage or unreadable input
 """
 import json
 import sys
@@ -43,7 +47,9 @@ def main(argv):
                         f" MISMATCH: {t['mismatches']}" if t["mismatches"] else "")
                 if r["kind"] == "point" and r.get("bisection"):
                     b = r["bisection"]
-                    line += f" | bisected: {b['examined']} pieces, {b['reading']}"
+                    line += f" | bisected: {b['examined']} looked at, hold {b['hold']} " \
+                            f"fail {b['fail']} straddle {b['straddle_at_depth_limit']}: " \
+                            f"{b['reading']}"
                     if r["located"]:
                         line += " (" + ", ".join(
                             f"{k} in [{v['approx'][0]:.6g}, {v['approx'][1]:.6g}]"
@@ -54,6 +60,7 @@ def main(argv):
                 if r["kind"] == "intersection":
                     s = r["subboxes"]
                     line += f" | subboxes {s['examined']} both hold {s['both_hold']}" \
+                            f" one fails {s['one_fails']}" \
                             f" undecided {s['undecided_at_depth_limit']} deepest {s['deepest']}"
                     if r["located"]:
                         loc = r["located"]
@@ -70,8 +77,55 @@ def main(argv):
             print(f"  MISMATCH check {m['index']} {m['formula']}: " + ", ".join(
                 f"{x['tier']} predicted {x['predicted_verdict']}, confirmed "
                 f"{x['confirmed_verdict']}" for x in m["predictions"] if x["match"] is False))
+    code = _proposals(rep, argv)
+    if code:
+        return code
     c = rep["counts"]
-    return 1 if c["FAILS"] or c["ONE_FAILS"] else (3 if c["VOID"] or c["UNDECIDED"] else 0)
+    return 1 if c["FAILS"] or c["ONE_FAILS"] else (
+        3 if c["VOID"] or c["UNDECIDED"] or c["MIXED"] else 0)
+
+
+def _proposals(rep, argv):
+    found = rep["proposals"]
+    quiet = "--json" in argv
+    if "--proposals" not in argv:
+        if found and not quiet:
+            print(f"{len(found)} identity candidate(s), status PROPOSED, not written "
+                  "(--proposals FILE writes them)")
+        return 0
+    try:
+        path = Path(argv[argv.index("--proposals") + 1])
+    except IndexError:
+        print(__doc__, file=sys.stderr)
+        return 2
+    old = []
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            old = data["proposals"] if isinstance(data, dict) else data
+            if not isinstance(old, list):
+                raise ValueError("no list of proposals")
+        except (OSError, ValueError, KeyError) as e:
+            print(f"refused: {path} exists and is not a proposals file ({e})", file=sys.stderr)
+            return 2
+
+    def key(p):
+        return json.dumps([p.get("lhs"), p.get("rhs"), p.get("domain"), p.get("fixed")],
+                          sort_keys=True)
+    seen = {key(p) for p in old}
+    new = []
+    for p in found:
+        if key(p) not in seen:
+            seen.add(key(p))
+            new.append(p)
+    path.write_text(json.dumps({
+        "note": "identity candidates from numcheck: UNDECIDED at tolerance 0, the two sides "
+                "agreeing at every sampled point. PROPOSED; no proof attempted.",
+        "status": "PROPOSED", "proposals": old + new}, indent=1) + "\n", encoding="utf-8")
+    if not quiet:
+        print(f"{len(new)} new identity candidate(s) -> {path} ({len(old)} kept); PROPOSED, "
+              "no proof attempted")
+    return 0
 
 
 if __name__ == "__main__":
