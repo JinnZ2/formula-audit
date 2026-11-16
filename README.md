@@ -501,16 +501,21 @@ case.json   hypotheses (>= 2 rivals; one alone -> VOID), each with prior + sourc
                  |                              a step can be reversed; replay(log)
                  v                              gives the same posteriors
    direction   RISING     raised by >= 2 evidence types with no shared ancestry
-               STACKED    raised more than once by one type only: logged, no signal
-               NO_SIGNAL  otherwise
+               FALLING    lowered by >= 2 evidence types with no shared ancestry
+               STACKED    moved one way more than once by one type only: logged, no signal
+               NO_SIGNAL  otherwise (also when both RISING and FALLING would apply)
    status      inference alone: at most PROPOSED. DERIVED only with direct evidence
-               that carries a passing check from 2a (PASS) or 2b (HOLDS / BOTH_HOLD)
-               and is itself OBSERVED or DERIVED.
+               that raises the rival, is itself OBSERVED or DERIVED, and carries a
+               check_ref {branch, file, record, sha256} that infer RE-READS: the
+               record is found, its sha256 is equal, and its verdict is PASS (2a) or
+               HOLDS / BOTH_HOLD with rigorous true (2b). Anything else, a merely
+               declared check included: PROPOSED, reason CHECK_UNVERIFIED.
 ```
 
 ```sh
 python3 -m infer rank case_snow.json [--json] [--log FILE]
 # exit 0 ranked, every evidence record usable | 3 case VOID or an evidence record VOID | 2 usage
+python3 -m infer ref 2b report.json 0        # the check_ref of one record, with its sha256
 ```
 
 Worked case, `case_snow.json` (Broad Street, 1854; miasma against water):
@@ -533,9 +538,13 @@ numbers       the worked case's priors and likelihood ratios are CONSTRUCTED for
               here is a finding about cholera.
 caps          3 for shadow and 2 for cross_domain are PROPOSED defaults, not derived
               from anything; each run logs the caps it used and where they came from
-inputs        a likelihood ratio, a constraint marked matched, a shared_ancestry tag
-              and a check verdict are all taken as given. Nothing here verifies them:
-              an untagged common source is counted twice.
+inputs        a likelihood ratio, a constraint marked matched and a shared_ancestry
+              tag are taken as given. Nothing here verifies them: an untagged common
+              source is counted twice.
+check_ref     infer confirms that the named record exists, is unchanged (sha256) and
+              has a passing verdict. It does not re-run the check, and it does not
+              judge whether that check has anything to do with the hypothesis: that
+              link is the evidence author's claim.
 flat prior    one flagged prior flattens the whole set (a prior is a statement about
               the rivals together); that reading is a choice made here
 RISING        means two independent kinds of evidence point the same way. It is not

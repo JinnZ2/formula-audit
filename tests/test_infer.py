@@ -10,7 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from infer import rank, read_json, replay  # noqa: E402
+from infer import rank, read_json, record_sha, replay, verify_check  # noqa: E402
+from kernel import check_file  # noqa: E402
+from numcheck import check_all  # noqa: E402
 
 SNOW = read_json((ROOT / "case_snow.json").read_text())
 
@@ -33,9 +35,9 @@ def ev(i, kind, target, lr, tags=(), status="OBSERVED", **kw):
     return e
 
 
-def run(evidence, hyps=None, **kw):
+def run(evidence, hyps=None, base_dir=None, **kw):
     return rank({"hypotheses": hyps or [hyp("a", "1/2"), hyp("b", "1/2")],
-                 "evidence": evidence, **kw})
+                 "evidence": evidence, **kw}, base_dir=base_dir)
 
 
 def post(rep):
@@ -188,7 +190,7 @@ class TestEvidence(unittest.TestCase):
                  ev("e", "direct", "a", "two"), ev("e", "direct", "a", "2", status="sure"),
                  dict(ev("e", "direct", "a", "2"), provenance=""),
                  dict(ev("e", "direct", "a", "2"), weight=3),
-                 dict(ev("e", "direct", "a", "2"), check={"branch": "9z"}), "not a record"]
+                 dict(ev("e", "direct", "a", "2"), check="passed"), "not a record"]
         for c in cases:
             r = run([c])
             self.assertEqual(r["verdict"], "RANKED")
@@ -209,18 +211,107 @@ class TestCeilingAndDirection(unittest.TestCase):
         self.assertGreater(F(h["posterior"]), F(999, 1000))
         self.assertEqual(h["status"], "PROPOSED")                       # however high it goes
 
-    def test_direct_check_from_2a_or_2b_may_move_to_derived(self):
+    def _reports(self, d):
+        """A real 2b report and a real 2a report, written into folder d."""
+        val = lambda v, u: {"value": v, "unit": u}                      # noqa: E731
+        checks = [{"formula": "F = m*a", "values": {"F": val("7.5", "N"), "m": val("2.5", "kg"),
+                                                    "a": val(3, "m/s**2")}},
+                  {"formula": "F = m*a", "values": {"F": val("8", "N"), "m": val("2.5", "kg"),
+                                                    "a": val(3, "m/s**2")}},
+                  {"formula": "y = x", "tolerance": "0.5", "fast": True,
+                   "values": {"y": val("1.0", "m"), "x": val("1.1", "m")}}]
+        b2 = check_all(checks, "checks.json")
+        (Path(d) / "numcheck_report.json").write_text(json.dumps(b2))
+        a2 = check_file(ROOT / "tests" / "data" / "prop.mm")
+        (Path(d) / "kernel_report.json").write_text(json.dumps(a2))
+        return b2, a2
+
+    def _ref(self, branch, file, record, rec):
+        return {"branch": branch, "file": file, "record": record, "sha256": record_sha(rec)}
+
+    def test_declared_but_absent_check_is_unverified(self):
+        # a check that is only declared: never enough
         for check in ({"branch": "2a", "verdict": "PASS"}, {"branch": "2b", "verdict": "HOLDS"}):
             r = run([ev("e", "direct", "a", "4", check=check)])
-            self.assertEqual(r["hypotheses"][0]["status"], "DERIVED", check)
-            self.assertEqual(r["hypotheses"][1]["status"], "PROPOSED")
-        for e in (ev("e", "direct", "a", "4", check={"branch": "2a", "verdict": "FAIL"}),
-                  ev("e", "direct", "a", "4", check={"branch": "2b", "verdict": "UNDECIDED"}),
-                  ev("e", "direct", "a", "4", check={"branch": "2a", "verdict": "PASS"},
-                     status="PROPOSED"),                                # the evidence is hearsay
-                  ev("e", "direct", "a", "1/4", check={"branch": "2a", "verdict": "PASS"}),
-                  ev("e", "shadow", "a", "3")):
-            self.assertEqual(run([e])["hypotheses"][0]["status"], "PROPOSED", e)
+            h = r["hypotheses"][0]
+            self.assertEqual(h["status"], "PROPOSED", check)
+            self.assertTrue(h["status_reason"].startswith("CHECK_UNVERIFIED"))
+            self.assertEqual(h["checks"][0]["state"], "CHECK_UNVERIFIED")
+        # a check_ref to a file that is not there
+        with tempfile.TemporaryDirectory() as d:
+            ref = {"branch": "2b", "file": "missing.json", "record": 0, "sha256": "0" * 64}
+            r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+            h = r["hypotheses"][0]
+            self.assertEqual(h["status"], "PROPOSED")
+            self.assertIn("CHECK_UNVERIFIED", h["status_reason"])
+            self.assertIn("cannot read missing.json", h["checks"][0]["reason"])
+        self.assertEqual(post(r)["a"], F(4, 5))            # the evidence still counts as inference
+
+    def test_real_2b_holds_record_moves_to_derived(self):
+        with tempfile.TemporaryDirectory() as d:
+            b2, _ = self._reports(d)
+            self.assertEqual((b2["records"][0]["verdict"], b2["records"][0]["rigorous"]),
+                             ("HOLDS", True))
+            ref = self._ref("2b", "numcheck_report.json", 0, b2["records"][0])
+            r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+            h = r["hypotheses"]
+            self.assertEqual(h[0]["status"], "DERIVED")
+            self.assertEqual(h[0]["checks"][0]["state"], "VERIFIED")
+            self.assertEqual(h[0]["checks"][0]["verdict_read"], "HOLDS")
+            self.assertIn("re-read and confirmed", h[0]["status_reason"])
+            self.assertEqual(h[1]["status"], "PROPOSED")           # only the one it bears on
+            self.assertEqual(r["status"], "PROPOSED")              # the ranking itself stays so
+            # the record FAILS, or is a --fast verdict: not confirmed
+            for i, why in ((1, "verdict is FAILS"), (2, "not rigorous")):
+                ref = self._ref("2b", "numcheck_report.json", i, b2["records"][i])
+                r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+                self.assertEqual(r["hypotheses"][0]["status"], "PROPOSED", i)
+                self.assertIn(why, r["hypotheses"][0]["checks"][0]["reason"])
+            # verified, but the evidence is hearsay, or lowers the hypothesis: not a lift
+            ref = self._ref("2b", "numcheck_report.json", 0, b2["records"][0])
+            for e in (ev("e", "direct", "a", "4", check_ref=ref, status="PROPOSED"),
+                      ev("e", "direct", "a", "1/4", check_ref=ref)):
+                h = run([e], base_dir=d)["hypotheses"][0]
+                self.assertEqual((h["status"], h["checks"][0]["state"]),
+                                 ("PROPOSED", "CHECK_UNVERIFIED"))
+            # a shadow cannot carry one
+            e = ev("s", "shadow", "a", "3", check_ref=ref)
+            self.assertEqual(run([e], base_dir=d)["hypotheses"][0]["status"], "PROPOSED")
+
+    def test_real_2a_pass_record_moves_to_derived(self):
+        with tempfile.TemporaryDirectory() as d:
+            _, a2 = self._reports(d)
+            rec = next(t for t in a2["theorem_records"] if t["label"] == "id")
+            ref = self._ref("2a", "kernel_report.json", "id", rec)
+            r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+            self.assertEqual(r["hypotheses"][0]["status"], "DERIVED")
+            ref["record"] = "nosuch"
+            r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+            self.assertEqual(r["hypotheses"][0]["status"], "PROPOSED")
+
+    def test_hash_mismatch_is_unverified(self):
+        with tempfile.TemporaryDirectory() as d:
+            b2, _ = self._reports(d)
+            good = self._ref("2b", "numcheck_report.json", 0, b2["records"][0])
+            # the sha256 of another record
+            ref = dict(good, sha256=record_sha(b2["records"][1]))
+            r = run([ev("e", "direct", "a", "4", check_ref=ref)], base_dir=d)
+            h = r["hypotheses"][0]
+            self.assertEqual(h["status"], "PROPOSED")
+            self.assertIn("CHECK_UNVERIFIED", h["status_reason"])
+            self.assertIn("sha256 mismatch", h["checks"][0]["reason"])
+            # the report is edited after the reference was taken
+            self.assertEqual(run([ev("e", "direct", "a", "4", check_ref=good)],
+                                 base_dir=d)["hypotheses"][0]["status"], "DERIVED")
+            b2["records"][0]["verdict"] = "HOLDS "
+            b2["records"][0]["note"] = "edited"
+            (Path(d) / "numcheck_report.json").write_text(json.dumps(b2))
+            r = run([ev("e", "direct", "a", "4", check_ref=good)], base_dir=d)
+            self.assertEqual(r["hypotheses"][0]["status"], "PROPOSED")
+            self.assertIn("sha256 mismatch", r["hypotheses"][0]["checks"][0]["reason"])
+            for bad in (None, "x", {"branch": "9z"}, {"branch": "2b"},
+                        dict(good, extra=1), dict(good, record="0"), dict(good, record=99)):
+                self.assertEqual(verify_check(bad, d)["state"], "CHECK_UNVERIFIED", bad)
 
     def test_direction(self):
         def d(*evidence):
@@ -233,11 +324,37 @@ class TestCeilingAndDirection(unittest.TestCase):
         # two types that come from the same place are not independent
         self.assertEqual(d(ev("e1", "direct", "a", "2", ["t"]),
                            ev("e2", "cross_domain", "a", "3", ["t"])), "NO_SIGNAL")
-        # evidence against does not raise
+        # one up and one down: neither direction has two
         self.assertEqual(d(ev("e1", "direct", "a", "2"), ev("e2", "shadow", "a", "1/2")),
                          "NO_SIGNAL")
         r = run([ev("e1", "direct", "a", "2"), ev("e2", "direct", "a", "3")])
         self.assertIn("no signal", r["hypotheses"][0]["direction_reason"])
+
+    def test_falling(self):
+        r = run([ev("e1", "direct", "a", "1/2"), ev("e2", "shadow", "a", "1/3")])
+        h = r["hypotheses"][0]
+        self.assertEqual(h["direction"], "FALLING")
+        self.assertIn("lowered by independent evidence of types: direct, shadow",
+                      h["direction_reason"])
+        self.assertEqual(post(r)["a"], F(1, 7))
+        self.assertEqual(r["hypotheses"][1]["direction"], "NO_SIGNAL")   # b was not touched
+        self.assertEqual(len(h["lowered_by"]), 2)
+
+        def d(*evidence):
+            return run(list(evidence))["hypotheses"][0]["direction"]
+        # one type lowering twice: stacked, no signal
+        self.assertEqual(d(ev("e1", "direct", "a", "1/2"), ev("e2", "direct", "a", "1/3")),
+                         "STACKED")
+        # two types lowering, same ancestry: not independent
+        self.assertEqual(d(ev("e1", "direct", "a", "1/2", ["t"]),
+                           ev("e2", "cross_domain", "a", "1/2", ["t"])), "NO_SIGNAL")
+        # raised by two independent types and lowered by two others: no signal either way
+        self.assertEqual(d(ev("e1", "direct", "a", "2"), ev("e2", "shadow", "a", "2"),
+                           ev("e3", "direct", "a", "1/3"), ev("e4", "cross_domain", "a", "1/2")),
+                         "NO_SIGNAL")
+        # raised by two independent types, lowered by one: still RISING
+        self.assertEqual(d(ev("e1", "direct", "a", "2"), ev("e2", "shadow", "a", "2"),
+                           ev("e3", "direct", "a", "1/3")), "RISING")
 
 
 class TestLog(unittest.TestCase):
@@ -295,6 +412,28 @@ class TestCli(unittest.TestCase):
             self.assertEqual(self.cli("rank", "case_snow.json", "--log", str(log)).returncode, 2)
         j = json.loads(self.cli("rank", "case_snow.json", "--json").stdout)
         self.assertEqual(j["ranking"][0]["id"], "water")
+
+    def test_ref_and_rank_from_files(self):
+        # numcheck writes a report; "infer ref" makes the check_ref; rank re-reads it
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "checks.json").write_text(json.dumps([{"formula": "y = x", "values": {
+                "y": {"value": 1, "unit": "m"}, "x": {"value": 1, "unit": "m"}}}]))
+            out = subprocess.run([sys.executable, "-m", "numcheck", "check",
+                                  str(d / "checks.json"), "--json"], cwd=ROOT,
+                                 capture_output=True, text=True).stdout
+            (d / "report.json").write_text(out)
+            r = self.cli("ref", "2b", str(d / "report.json"), "0")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            ref = json.loads(r.stdout)
+            ref["file"] = "report.json"                    # looked for beside the case file
+            case = {"hypotheses": [hyp("a", "1/2"), hyp("b", "1/2")],
+                    "evidence": [ev("e", "direct", "a", "4", check_ref=ref)]}
+            (d / "case.json").write_text(json.dumps(case))
+            j = json.loads(self.cli("rank", str(d / "case.json"), "--json").stdout)
+            self.assertEqual(j["hypotheses"][0]["status"], "DERIVED")
+            self.assertEqual(self.cli("ref", "2b", str(d / "report.json"), "7").returncode, 2)
+            self.assertEqual(self.cli("ref", "2c", str(d / "report.json"), "0").returncode, 2)
 
 
 if __name__ == "__main__":

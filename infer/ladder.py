@@ -28,30 +28,43 @@ SHARED ANCESTRY  evidence that shares a tag with earlier evidence on the same
 
 POSTERIOR  exact, per rival: prior x the likelihood ratios that count,
   normalised. Ceiling: a result reached by inference alone is at most
-  PROPOSED. A rival moves to DERIVED only on direct evidence that carries a
-  passing check from 2a (PASS) or 2b (HOLDS / BOTH_HOLD) and is itself
-  OBSERVED or DERIVED.
+  PROPOSED. A rival moves to DERIVED only on direct evidence that raises it,
+  is itself OBSERVED or DERIVED, and carries a check_ref that this module
+  re-reads and confirms:
+    check_ref  {branch: "2a" | "2b", file, record, sha256}
+               file    a JSON report written by branch 2a or 2b
+               record  2b: the record's index; 2a: the theorem label, or the
+                       entry id of a "kernel prove" report
+               sha256  of that record (canonical JSON; see record_sha)
+    confirmed  the file is read, the record found, its sha256 equal, and its
+               verdict PASS (2a) or HOLDS / BOTH_HOLD with rigorous true (2b)
+    otherwise  the rival stays PROPOSED, reason CHECK_UNVERIFIED. A check that
+               is only declared ("check": {...verdict...}) is never enough.
 
 DIRECTION  per rival:
     RISING     raised by at least two evidence types with no shared ancestry
-    STACKED    raised more than once, by one type only: logged, no signal
-    NO_SIGNAL  otherwise
+    FALLING    lowered by at least two evidence types with no shared ancestry
+    STACKED    moved one way more than once, by one type only: logged, no signal
+    NO_SIGNAL  otherwise (also when it is both RISING and FALLING)
 
 LOG  every step is logged with the factor it applied; a step can be reversed
   (and is, when stronger evidence of the same ancestry arrives); replay(log)
   reproduces the posteriors from the log alone.
 """
+import hashlib
 import json
 from fractions import Fraction
+from pathlib import Path
 
-VERSION = "infer branch5-0"
+VERSION = "infer branch5-1"
 STATUS = ("OBSERVED", "DERIVED", "PROPOSED")
 TYPES = ("direct", "shadow", "cross_domain")
 PRIOR_FLAGS = ("normalization", "superiority", "convenience", "unknown")
 DEFAULT_CAPS = {"shadow": Fraction(3), "cross_domain": Fraction(2)}
 PASSING = {"2a": ("PASS",), "2b": ("HOLDS", "BOTH_HOLD")}
 EVIDENCE_FIELDS = ("id", "hypothesis", "type", "lr", "provenance", "shared_ancestry", "status",
-                   "alternative_casters", "consistent_with", "constraints", "check", "note")
+                   "alternative_casters", "consistent_with", "constraints", "check",
+                   "check_ref", "note")
 HYPOTHESIS_FIELDS = ("id", "statement", "prior", "prior_source", "prior_flag", "note")
 
 
@@ -75,6 +88,78 @@ def frac(x, what):
         except (ValueError, ZeroDivisionError):
             raise Void(f"{what}: cannot read {x!r} as a number")
     raise Void(f"{what}: give numbers as integers or strings, not binary floats")
+
+
+def record_sha(record):
+    """sha256 of a report record: JSON with sorted keys and no spaces."""
+    text = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def find_record(report, branch, record):
+    """The record a check_ref names, and its verdict. Raises Void."""
+    if branch == "2b":
+        rows = report.get("records") if isinstance(report, dict) else None
+        if not isinstance(rows, list) or not isinstance(record, int) \
+                or isinstance(record, bool) or not 0 <= record < len(rows):
+            raise Void(f"no record {record!r} in the 2b report")
+        r = rows[record]
+        if not isinstance(r, dict) or "deciding_tier" not in r:
+            raise Void("that record is not a numcheck record")
+        return r, r.get("verdict"), r.get("rigorous") is True
+    rows = report.get("theorem_records") if isinstance(report, dict) else None
+    if isinstance(rows, list):                         # a "kernel check" report
+        for r in rows:
+            if isinstance(r, dict) and r.get("label") == record:
+                return r, r.get("verdict"), True
+        raise Void(f"no theorem {record!r} in the 2a report")
+    rows = report.get("records") if isinstance(report, dict) else None
+    if isinstance(rows, list):                         # a "kernel prove" report
+        for r in rows:
+            if isinstance(r, dict) and "kernel_verdict" in r and r.get("id") == record:
+                return r, r.get("kernel_verdict"), True
+    raise Void(f"no record {record!r} in the 2a report")
+
+
+def verify_check(ref, base_dir):
+    """Re-read the check a piece of evidence points to. Returns
+    {"state": "VERIFIED" | "CHECK_UNVERIFIED", "reason", ...}."""
+    out = {"state": "CHECK_UNVERIFIED", "reason": None, "check_ref": ref}
+    try:
+        if not isinstance(ref, dict):
+            raise Void("no check_ref: a declared check is not re-read and is not enough")
+        extra = [k for k in ref if k not in ("branch", "file", "record", "sha256")]
+        if extra:
+            raise Void(f"check_ref has an undeclared field {extra[0]!r}")
+        branch = ref.get("branch")
+        if branch not in PASSING:
+            raise Void("check_ref must name branch 2a or 2b")
+        if not isinstance(ref.get("file"), str) or not isinstance(ref.get("sha256"), str):
+            raise Void("check_ref needs file and sha256")
+        path = Path(ref["file"])
+        if not path.is_absolute():
+            path = Path(base_dir or ".") / path
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise Void(f"cannot read {ref['file']}: {type(e).__name__}")
+        rec, verdict, rigorous = find_record(report, branch, ref.get("record"))
+        got = record_sha(rec)
+        out["sha256_found"] = got
+        if got != ref["sha256"].lower():
+            raise Void("sha256 mismatch: the record is not the one the evidence names")
+        out["verdict_read"] = verdict
+        if verdict not in PASSING[branch]:
+            raise Void(f"the record's verdict is {verdict}, not "
+                       + " / ".join(PASSING[branch]))
+        if not rigorous:
+            raise Void("the 2b record is not rigorous (a --fast verdict)")
+        out.update(state="VERIFIED", reason=f"re-read: {branch} {verdict}, sha256 equal")
+    except Void as v:
+        out["reason"] = str(v)
+    except Exception as e:                       # fail closed
+        out["reason"] = f"internal: {type(e).__name__}: {e}"
+    return out
 
 
 def _post(weights):
@@ -193,16 +278,42 @@ def read_evidence(e, ids, caps):
         if strength(lr) > cap:
             lr = cap if lr > 1 else 1 / cap
             detail["capped"] = True
-    if kind == "direct" and e.get("check") is not None:
-        c = e["check"]
-        if not isinstance(c, dict) or c.get("branch") not in PASSING:
-            raise Void("check must name branch 2a or 2b")
-        detail["check_passes"] = c.get("verdict") in PASSING[c["branch"]]
+    if kind == "direct" and (e.get("check") is not None or e.get("check_ref") is not None):
+        if e.get("check") is not None and not isinstance(e["check"], dict):
+            raise Void("check is not a record")
+        detail["claims_check"] = True
     return targets, lr, detail
 
 
-def rank(case):
-    """The whole run. Returns a report; verdict RANKED or VOID."""
+def _direction(moves_up, moves_down):
+    def independent(group):
+        return any(a["type"] != b["type"] and not set(a["tags"]) & set(b["tags"])
+                   for i, a in enumerate(group) for b in group[i + 1:])
+
+    def stacked(group):
+        return len(group) >= 2 and len({a["type"] for a in group}) == 1
+    up, down = independent(moves_up), independent(moves_down)
+    kinds = lambda g: ", ".join(sorted({a["type"] for a in g}))          # noqa: E731
+    if up and down:
+        return "NO_SIGNAL", "raised and lowered, each by independent evidence types"
+    if up:
+        return "RISING", "raised by independent evidence of types: " + kinds(moves_up)
+    if down:
+        return "FALLING", "lowered by independent evidence of types: " + kinds(moves_down)
+    for group, word in ((moves_up, "raised"), (moves_down, "lowered")):
+        if stacked(group):
+            return "STACKED", f"{word} {len(group)} times by {group[0]['type']} " \
+                              "evidence only: no signal"
+    for group, word in ((moves_up, "raised"), (moves_down, "lowered")):
+        if len(group) >= 2:
+            return "NO_SIGNAL", f"{word} by more than one type, but they share ancestry"
+    return "NO_SIGNAL", f"raised by {len(moves_up)} and lowered by {len(moves_down)} " \
+                        "piece(s) of evidence"
+
+
+def rank(case, base_dir=None):
+    """The whole run. Returns a report; verdict RANKED or VOID. base_dir: where
+    the files named by check_ref are looked for (the case file's folder)."""
     log = []
     rep = {"tool": VERSION, "verdict": "VOID", "void_reason": None, "status": None,
            "ceiling": "inference alone gives at most PROPOSED",
@@ -309,23 +420,25 @@ def rank(case):
         for h in case["hypotheses"]:
             hid = h["id"]
             raising = [a for a in applied if hid in a["targets"] and a["lr"] > 1]
-            types = sorted({a["type"] for a in raising})
-            independent = any(
-                a["type"] != b["type"] and not set(a["tags"]) & set(b["tags"])
-                for i, a in enumerate(raising) for b in raising[i + 1:])
-            if independent:
-                signal, why = "RISING", "raised by independent evidence of types: " \
-                    + ", ".join(types)
-            elif len(raising) >= 2 and len(types) == 1:
-                signal, why = "STACKED", f"raised {len(raising)} times by {types[0]} " \
-                    "evidence only: no signal"
-            elif len(raising) >= 2:
-                signal, why = "NO_SIGNAL", "raised by more than one type, but they share ancestry"
-            else:
-                signal, why = "NO_SIGNAL", f"raised by {len(raising)} piece(s) of evidence"
-            lift = [a["id"] for a in applied if a["type"] == "direct" and hid in a["targets"]
-                    and a["lr"] > 1 and a["detail"].get("check_passes")
-                    and a["status"] in ("OBSERVED", "DERIVED")]
+            lowering = [a for a in applied if hid in a["targets"] and a["lr"] < 1]
+            signal, why = _direction(raising, lowering)
+            checks, lift = [], []
+            for a in applied:
+                if not (a["type"] == "direct" and hid in a["targets"]
+                        and a["detail"].get("claims_check")):
+                    continue
+                src = next(x for x in evidence if isinstance(x, dict) and x.get("id") == a["id"])
+                c = verify_check(src.get("check_ref"), base_dir)
+                if c["state"] == "VERIFIED" and a["lr"] <= 1:
+                    c.update(state="CHECK_UNVERIFIED",
+                             reason="the evidence does not raise this hypothesis")
+                elif c["state"] == "VERIFIED" and a["status"] not in ("OBSERVED", "DERIVED"):
+                    c.update(state="CHECK_UNVERIFIED",
+                             reason=f"the evidence itself is {a['status']}")
+                checks.append({"evidence": a["id"], **c})
+                if c["state"] == "VERIFIED":
+                    lift.append(a["id"])
+            unverified = [c for c in checks if c["state"] != "VERIFIED"]
             rep["hypotheses"].append({
                 "id": hid, "statement": h.get("statement"),
                 "prior_given": None if h.get("prior") is None else str(h["prior"]),
@@ -333,13 +446,15 @@ def rank(case):
                 "prior_used": log[1]["weights"][hid],
                 "posterior": str(post[hid]), "posterior_approx": float(post[hid]),
                 "status": "DERIVED" if lift else "PROPOSED",
-                "status_reason": ("direct evidence with a passing 2a / 2b check: "
-                                  + ", ".join(lift)) if lift
+                "status_reason": ("direct evidence whose 2a / 2b check was re-read and "
+                                  "confirmed: " + ", ".join(lift)) if lift
+                else ("CHECK_UNVERIFIED: " + "; ".join(
+                    f"{c['evidence']}: {c['reason']}" for c in unverified)) if unverified
                 else "inference only: at most PROPOSED",
+                "checks": checks,
                 "direction": signal, "direction_reason": why,
                 "raised_by": [{"evidence": a["id"], "type": a["type"]} for a in raising],
-                "lowered_by": [{"evidence": a["id"], "type": a["type"]} for a in applied
-                               if hid in a["targets"] and a["lr"] < 1]})
+                "lowered_by": [{"evidence": a["id"], "type": a["type"]} for a in lowering]})
         rep["ranking"] = [{"id": x["id"], "posterior": x["posterior"],
                            "direction": x["direction"], "status": x["status"]}
                           for x in sorted(rep["hypotheses"],
