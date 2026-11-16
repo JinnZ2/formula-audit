@@ -1,17 +1,18 @@
 """tiers -- one formula walk, three number systems. Co-authored.
 
-  float     binary64. Fast, NOT an enclosure. It decides only when the result
-            is far from the tolerance edge (margin > 1e-9 x the largest
-            magnitude met); otherwise it says "too close to call".
-  decimal   Decimal at a set precision. Still not an enclosure. Decides when
-            the margin > 10^-(prec/2) x the largest magnitude met. No sin /
-            cos here: a formula using them climbs past this tier.
+  float     binary64. TRIAGE, not an enclosure. It predicts a verdict only
+            when the result is far from the tolerance edge (margin > 1e-9 x
+            the largest magnitude met); otherwise "too close to call".
+  decimal   Decimal at a set precision. TRIAGE too. Predicts when the margin
+            > 10^-(prec/2) x the largest magnitude met. No sin / cos here.
   interval  Fraction intervals; sqrt exp ln sin cos as outward enclosures at
-            a set precision. This tier is the rigorous one: HOLDS and FAILS
-            from it are statements about every value inside the inputs.
+            a set precision. The rigorous tier, and the one that decides:
+            HOLDS and FAILS from it are statements about every value inside
+            the inputs.
 
-A tier that cannot run (overflow, domain, no such function) climbs; only the
-interval tier can say VOID.
+The margin rule is a heuristic: rounding error compounds over a long chain
+of steps and the rule does not bound it. A tier that cannot run (overflow,
+domain, no such function) is skipped; only the interval tier can say VOID.
 """
 import ast
 import decimal

@@ -1,4 +1,7 @@
-"""python3 -m numcheck check checks.json [--json]
+"""python3 -m numcheck check checks.json [--json] [--fast]
+
+  --fast   take a float / Decimal triage prediction as the verdict when there is one.
+           Not rigorous; such records carry rigorous: false.
 
 Exit: 0 every check HOLDS / BOTH_HOLD | 1 at least one FAILS / ONE_FAILS
       3 none failed, at least one VOID or UNDECIDED | 2 usage or unreadable input
@@ -20,7 +23,7 @@ def main(argv):
     except (OSError, ValueError) as e:
         print(f"cannot read {argv[1]}: {e}", file=sys.stderr)
         return 2
-    rep = check_all(data, argv[1])
+    rep = check_all(data, argv[1], fast="--fast" in argv)
     if "--json" in argv:
         print(json.dumps(rep, indent=1))
     else:
@@ -32,6 +35,14 @@ def main(argv):
             else:
                 line += f" | tier {r['deciding_tier']} precision {r['precision']}" \
                         f" rigorous {r['rigorous']} | status {r['status']}"
+                if r["kind"] == "point" and r["triage"]:
+                    t = r["triage"]
+                    line += f" | triage {t['predictions'] or 'none'}" + (
+                        f" DISAGREES: {t['disagrees_with_verdict']}"
+                        if t["disagrees_with_verdict"] else "")
+                if r["kind"] == "point" and r.get("bisection"):
+                    b = r["bisection"]
+                    line += f" | bisected: {b['examined']} pieces, {b['reading']}"
                 if r["kind"] == "point" and r["intervals"]:
                     d = r["intervals"]["difference"]["approx"]
                     line += f" | lhs - rhs in [{d[0]:.6g}, {d[1]:.6g}] tol {r['intervals']['tolerance']}"

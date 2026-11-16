@@ -19,8 +19,9 @@ def val(value, unit="1", status=None):
     return {"value": value, "unit": unit, "status": status}
 
 
-def point(formula, tolerance="0", **values):
-    return check_point({"formula": formula, "tolerance": tolerance, "values": values})
+def point(formula, tolerance="0", fast=False, **values):
+    return check_point({"formula": formula, "tolerance": tolerance, "values": values,
+                        "fast": fast})
 
 
 class TestInterval(unittest.TestCase):
@@ -118,6 +119,10 @@ class TestPoint(unittest.TestCase):
         self.assertEqual([t["outcome"] for t in r["tiers"]],
                          ["too close to call", "too close to call", "decided"])
         self.assertEqual(r["tiers"][0]["tier"], "float")
+        self.assertEqual(r["triage"], {"predictions": [], "disagrees_with_verdict": []})
+        fast = check_point(dict(data, fast=True))        # even fast cannot shortcut this one
+        self.assertEqual((fast["verdict"], fast["deciding_tier"], fast["rigorous"]),
+                         ("HOLDS", "interval", True))
         # and the float tier never says HOLDS or FAILS on it by itself
         S = FloatSys()
         d = S.sub(S.const(F(3, 10)), S.add(S.const(F(1, 10)), S.const(F(2, 10))))
@@ -127,28 +132,68 @@ class TestPoint(unittest.TestCase):
         r = point("c = a + b", a=val("0.1", "m"), b=val("0.2", "m"),
                   c=val("0.30000000000000001", "m"))
         self.assertEqual(0.1 + 0.2 - 0.30000000000000001, 0.1 + 0.2 - 0.3)
-        self.assertEqual((r["verdict"], r["deciding_tier"]), ("FAILS", "decimal"))
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"]),
+                         ("FAILS", "interval", True))
         self.assertEqual(r["tiers"][0]["outcome"], "too close to call")     # float could not
+        self.assertEqual(r["tiers"][1]["predicts"], "FAILS")                # Decimal saw it
+        self.assertEqual(r["intervals"]["difference"]["lo"], "1/100000000000000000")
 
     def test_a_binary_float_is_refused(self):
         r = point("c = a", a=val(0.1, "m"), c=val("0.1", "m"))
         self.assertEqual(r["verdict"], "VOID")
         self.assertIn("binary float", r["void_reason"])
 
-    def test_clear_cases_decide_at_the_float_tier(self):
-        r = point("E = m*c**2", "1e9", E=val("9.0e16", "J"), m=val(1, "kg"),
-                  c=val(299792458, "m/s"))
-        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"]),
-                         ("FAILS", "float", False))
-        self.assertEqual(len(r["tiers"]), 1)
+    def test_interval_tier_decides_by_default(self):
+        kw = dict(E=val("9.0e16", "J"), m=val(1, "kg"), c=val(299792458, "m/s"))
+        r = point("E = m*c**2", "1e9", **kw)
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["precision"], r["rigorous"]),
+                         ("FAILS", "interval", "exact", True))
+        self.assertEqual([(t["tier"], t["role"], t["predicts"]) for t in r["tiers"]],
+                         [("float", "triage", "FAILS"), ("decimal", "triage", "FAILS"),
+                          ("interval", "decides", None)])
+        self.assertEqual(r["triage"], {"predictions": ["FAILS", "FAILS"],
+                                       "disagrees_with_verdict": []})
+        self.assertEqual(r["intervals"]["difference"]["lo"], str(9 * 10 ** 16 - 299792458 ** 2))
+        self.assertEqual(r["intervals"]["difference"]["lo"], "124482126318236")
+        self.assertFalse(r["fast"])
         r = point("y = x", "0.5", y=val("1.0", "m"), x=val("1.1", "m"))
-        self.assertEqual((r["verdict"], r["deciding_tier"]), ("HOLDS", "float"))
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"]),
+                         ("HOLDS", "interval", True))
 
-    def test_decimal_tier_decides_between(self):
-        r = point("y = x", "1e-12", y=val("1", "m"), x=val("1.000000000001001", "m"))
-        self.assertEqual((r["verdict"], r["deciding_tier"], r["precision"]),
-                         ("FAILS", "decimal", 50))
+    def test_fast_takes_a_triage_prediction_and_says_so(self):
+        kw = dict(E=val("9.0e16", "J"), m=val(1, "kg"), c=val(299792458, "m/s"))
+        r = point("E = m*c**2", "1e9", fast=True, **kw)
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"], r["fast"]),
+                         ("FAILS", "float", False, True))
+        self.assertEqual(len(r["tiers"]), 1)
+        self.assertEqual(r["tiers"][0]["role"], "decided (fast)")
+        self.assertIsNone(r["intervals"])
+        r = point("y = x", "1e-12", fast=True, y=val("1", "m"), x=val("1.000000000001001", "m"))
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["precision"], r["rigorous"]),
+                         ("FAILS", "decimal", 50, False))
         self.assertEqual(r["tiers"][0]["outcome"], "too close to call")
+        r = check_point({"formula": "y = x", "values": {"y": val(1, "m"), "x": val(2, "m")}},
+                        fast=True)                       # the caller's flag, e.g. --fast
+        self.assertEqual((r["deciding_tier"], r["rigorous"]), ("float", False))
+
+    def test_a_wrong_triage_prediction_is_logged_not_used(self):
+        # the float margin rule is a heuristic and can be wrong: binary64 reads
+        # (1e16 + 3) - 1e16 as 4, and the factor 1e10 lifts that error far above
+        # the guard (1e-9 x the largest magnitude met). Exactly, y = 3e10 holds.
+        self.assertEqual((1e16 + 3) - 1e16, 4.0)
+        kw = dict(y=val("3e10", "1"), a=val("1e16", "1"), b=val(3, "1"), c=val("1e10", "1"))
+        r = point("y = ((a + b) - a)*c", "1", **kw)
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"]),
+                         ("HOLDS", "interval", True))
+        self.assertEqual(r["tiers"][0]["predicts"], "FAILS")           # float: wrong
+        self.assertEqual(r["tiers"][1]["predicts"], "HOLDS")           # Decimal(50): right
+        self.assertEqual(r["triage"]["disagrees_with_verdict"], ["float"])
+        fast = point("y = ((a + b) - a)*c", "1", fast=True, **kw)
+        self.assertEqual((fast["verdict"], fast["rigorous"]), ("FAILS", False))   # why not fast
+        # a milder cancellation is caught by the guard: "too close to call"
+        r = point("y = (a + b) - a", "0.25", y=val(1, "1"), a=val("1e16", "1"), b=val(1, "1"))
+        self.assertEqual((r["verdict"], r["tiers"][0]["outcome"]),
+                         ("HOLDS", "too close to call"))
 
     def test_straddle_is_undecided(self):
         r = point("x = v*t", "0.5", x=val(["9.8", "10.4"], "m"), v=val(2, "m/s"),
@@ -158,12 +203,39 @@ class TestPoint(unittest.TestCase):
         self.assertEqual([t["outcome"] for t in r["tiers"][:2]], ["skipped", "skipped"])
         self.assertEqual((r["intervals"]["difference"]["lo"], r["intervals"]["difference"]["hi"]),
                          ("-2/5", "3/5"))
+        b = r["bisection"]                 # bisected first; the straddle is real
+        self.assertTrue(b["mixed"])
+        self.assertGreater(b["hold"], 0)
+        self.assertGreater(b["fail"], 0)
+        self.assertEqual(sorted(b["variables_split"]), ["t", "x"])
+        self.assertIsNotNone(b["a_piece_that_fails"])
         r = point("x = v*t", "0.7", x=val(["9.8", "10.4"], "m"), v=val(2, "m/s"),
                   t=val(["4.9", "5.1"], "s"))
         self.assertEqual(r["verdict"], "HOLDS")
+        self.assertIsNone(r["bisection"])                 # decided without it
         r = point("x = v*t", "0.1", x=val(["9.8", "10.4"], "m"), v=val(2, "m/s"),
                   t=val(["5.3", "5.4"], "s"))
         self.assertEqual(r["verdict"], "FAILS")
+
+    def test_bisection_closes_a_dependency_straddle(self):
+        # x*x and x**2 are equal; on a wide x their enclosures differ by up to 2
+        kw = dict(x=val([0, 1], "m"))
+        r = point("x*x = x**2", "0.05", **kw)
+        self.assertEqual(r["intervals"]["difference"]["lo"], "-1")      # the first look
+        self.assertEqual((r["verdict"], r["rigorous"]), ("HOLDS", True))
+        b = r["bisection"]
+        self.assertEqual((b["fail"], b["straddle_at_depth_limit"], b["mixed"]), (0, 0, False))
+        self.assertGreater(b["hold"], 1)
+        r = check_point({"formula": "x*x = x**2", "tolerance": "0.05", "depth": 2,
+                         "values": kw})
+        self.assertEqual(r["verdict"], "UNDECIDED")                    # depth limit too low
+        self.assertEqual(r["bisection"]["reading"], "pieces still straddle at the depth limit")
+        r = point("x*x = x**2", "0", **kw)        # tolerance 0: pieces narrow, never close
+        self.assertEqual(r["verdict"], "UNDECIDED")
+        r = point("x*x = x**2 + c", "0.05", c=val(1, "m**2"), **kw)     # every piece fails
+        self.assertEqual(r["verdict"], "FAILS")
+        r = point("y = c/x", "1", y=val(1, "1"), c=val(1, "1"), x=val([-1, 1], "1"))
+        self.assertEqual(r["verdict"], "VOID")                         # still fail-closed
 
     def test_enclosure_precision_climbs(self):
         # sqrt(2)**2 = 2 exactly, but an enclosure of sqrt(2) can only straddle 0
@@ -174,6 +246,7 @@ class TestPoint(unittest.TestCase):
                          [30, 60, 120])
         r = point("y = sqrt(x)*sqrt(x)", "1e-40", y=val(2, "m**2"), x=val(2, "m**2"))
         self.assertEqual((r["verdict"], r["precision"]), ("HOLDS", 60))
+        self.assertIsNone(r["bisection"])                 # point inputs: nothing to split
         r = point("y = sin(x)", "1e-20", y=val("0.8414709848078965066525", "1"), x=val(1, "1"))
         self.assertEqual((r["verdict"], r["deciding_tier"]), ("HOLDS", "interval"))
         self.assertEqual(r["tiers"][1]["outcome"], "cannot run")       # no sin at decimal
@@ -300,6 +373,13 @@ class TestCli(unittest.TestCase):
             self.assertEqual(self.cli("check", str(f)).returncode, 3)
             f.write_text(json.dumps([ok, {"kind": "other"}]))
             self.assertEqual(self.cli("check", str(f)).returncode, 3)
+            f.write_text(json.dumps([ok]))
+            slow = json.loads(self.cli("check", str(f), "--json").stdout)["records"][0]
+            quick = json.loads(self.cli("check", str(f), "--json", "--fast").stdout)["records"][0]
+            self.assertEqual((slow["rigorous"], slow["deciding_tier"]), (True, "interval"))
+            self.assertEqual((quick["rigorous"], quick["fast"]), (True, True))   # 1 = 1: too close
+        r = json.loads(self.cli("check", "checks.json", "--json", "--fast").stdout)["records"][2]
+        self.assertEqual((r["deciding_tier"], r["rigorous"]), ("float", False))
 
 
 if __name__ == "__main__":

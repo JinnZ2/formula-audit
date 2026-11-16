@@ -139,18 +139,24 @@ phone           no phone timing was taken; see the run notes in the commit that
 checks.json --> branch 1 on the formula ---- not PASS ----> VOID (with branch 1's reason)
                       | PASS
                       v
-      float  --too close-->  Decimal(prec)  --too close-->  Fraction intervals
-      (fast, not rigorous)   (not rigorous)                 (rigorous; sqrt exp ln sin cos
-            |                      |                         as outward enclosures)
-            +-------- decided -----+----------- decided ----------+
-                                   v
+      float, Decimal(prec)  = TRIAGE: predict the verdict, or "too close to call";
+                              logged beside the verdict, never used as it
+                      v
+      Fraction intervals    = THE VERDICT (rigorous; sqrt exp ln sin cos as outward
+                              enclosures, precision doubling to max_precision)
+                      |  straddles, and an input is an interval?
+                      v
+      bisect the inputs to the depth limit: all pieces HOLD -> HOLDS,
+      all FAIL -> FAILS, else UNDECIDED (pieces counted; "mixed" = holds for some
+      of the given values and fails for others)
+
         HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside
-        UNDECIDED  straddles the edge at the last tier
+        UNDECIDED  straddles the edge after all of the above
         VOID  no value on these inputs (division by an interval containing 0, ...)
 ```
 
 ```sh
-python3 -m numcheck check checks.json [--json]
+python3 -m numcheck check checks.json [--json] [--fast]
 # exit 0 all HOLDS / BOTH_HOLD | 1 any FAILS / ONE_FAILS | 3 VOID or UNDECIDED, none failed | 2 usage
 ```
 
@@ -159,9 +165,11 @@ values        a number or an interval [lo, hi], with a unit and its own status t
               (OBSERVED / DERIVED / PROPOSED, or null: never filled in). Numbers
               are read exactly as written: 0.1 is one tenth.
 tolerance     t >= 0, a plain number in the units of the formula's two sides
-tiers         a tier is climbed only when it cannot call the result. Interval-valued
-              inputs go straight to the interval tier. The record names the tier
-              that decided, its precision, and rigorous: true / false.
+tiers         the interval tier decides. The record lists every tier with its role
+              (triage / decides), what triage predicted, and any triage prediction
+              that disagrees with the verdict.
+--fast        (or "fast": true on a check) takes a triage prediction as the verdict
+              when there is one. Not rigorous: such a record carries rigorous: false.
 status        HOLDS / FAILS / UNDECIDED are DERIVED; VOID has none
 intersection  two formulas and a box. BOTH_HOLD: both hold on every subbox reached.
               ONE_FAILS: one fails at every point of a located subbox.
@@ -172,12 +180,15 @@ slots         as branch 1: VOID (absent) or UNCHECKED (given, not checked)
 Limits of branch 2b
 
 ```text
-rigorous      only the interval tier. A float- or Decimal-tier verdict rests on a
-              margin rule (1e-9, or 10^-(prec/2), times the largest magnitude met),
-              not on an enclosure; rigorous: false says so on the record.
-tolerance 0   on interval inputs an equality can hold exactly and still read
-              UNDECIDED: x*x and x**2 have different enclosures (the dependency
-              problem). Enclosures are safe, not tight.
+fast          a triage prediction rests on a margin rule (1e-9, or 10^-(prec/2),
+              times the largest magnitude met). It is a heuristic with no bound
+              over a long chain of steps: (1e16 + 1) - 1e16 = 1 is predicted FAILS
+              by the float tier. Only --fast lets it stand, marked rigorous: false.
+tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x and x**2
+              have different enclosures (the dependency problem), and bisection
+              narrows the gap without closing it. With a tolerance > 0 bisection
+              closes it, if the depth limit allows.
+intervals     inputs given as intervals are treated as independent ranges
 ONE_FAILS     needs a whole subbox where a formula fails; a failure at single points
               only reads UNDECIDED
 units         branch 1's blind spots carry over: no scale factors, so values are
