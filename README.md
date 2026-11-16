@@ -598,7 +598,11 @@ evidential    how the claimant knows, mapped to the claim's own status and carri
                       shared, multi_gen, checkable, not_central, each y / n.
                       all y -> OBSERVED, with provenance {transmission: oral,
                       multi_generation: true, relay: holder}; any n -> PROPOSED;
-                      a check not answered, or another name -> DEGRADED, naming it
+                      a check not answered, or another name -> DEGRADED, naming it.
+                      answered_by (who answered the four) is required: missing ->
+                      DEGRADED. checkable_ref {file, record, sha256} is optional;
+                      given, it is re-read (file opened, record found, sha256
+                      compared) and a mismatch -> DEGRADED.
               none given -> null. A PASS never upgrades it.
 status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
               table_entry_status is the place-table entry's, PROPOSED until the
@@ -626,10 +630,16 @@ table           the shipped places.json is an example written here, all PROPOSED
 Lojban          the shapes (glare, snura, jibni, zmadu, xamgu) and the meanings of
                 se'o, ja'o and ka'u are recalled, not checked against a Lojban source:
                 the reference pages could not be reached from the build.
-oral record     the four checks are answered y / n by the claimant. Nothing here tests
-                whether an account really is shared, multi-generational, checkable
-                or not central; the row is taken as given. What each check means in
-                full is the holder's, and is not written out in this repository.
+oral record     the four checks are answered y / n by the person named in answered_by.
+                Nothing here tests whether an account really is shared,
+                multi-generational, checkable or not central; the row is taken as
+                given. What each check means in full is the holder's, and is not
+                written out in this repository. A checkable_ref is confirmed to
+                exist and be unchanged; whether that record bears on the account is
+                the claimant's statement.
+source          a claim's "source" is NOT required today: a hearsay or observed claim
+                with no source still PASSes. An oral claim (ka'u) must name who
+                answered. The two are not yet held to the same rule.
 self-report     "the speaker" is matched by text: x1 empty, or "I" / "me" / "myself",
                 or the speaker's name. Nothing checks that a se'o claim really is
                 about an inner state.

@@ -199,16 +199,20 @@ class TestV1(unittest.TestCase):
         r = claim("safe", dict(FULL, x1="that location"), evidential="se'o", speaker="Ana")
         self.assertEqual(r["verdict"], "DEGRADED")                 # external, though all filled
 
-    ORAL = {"shared": "y", "multi_gen": "y", "checkable": "y", "not_central": "y"}
+    ORAL = {"shared": "y", "multi_gen": "y", "checkable": "y", "not_central": "y",
+            "answered_by": "the carrier"}
+    FOUR = ("shared", "multi_gen", "checkable", "not_central")
     BETTER = {"x1": "the new route", "x2": "night drivers", "x3": "hours of rest kept"}
 
     def test_kau_passing_all_four_is_observed_with_provenance(self):
         r = claim("better", self.BETTER, evidential="ka'u", oral_record=self.ORAL)
         self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))   # not demoted
         self.assertEqual(r["claim_provenance"], {"transmission": "oral",
-                                                 "multi_generation": True, "relay": "holder"})
+                                                 "multi_generation": True, "relay": "holder",
+                                                 "answered_by": "the carrier"})
         self.assertTrue(r["oral_record"]["all_met"])
-        self.assertEqual(r["oral_record"]["checks"], self.ORAL)
+        self.assertEqual(r["oral_record"]["checks"], {n: "y" for n in self.FOUR})
+        self.assertIsNone(r["oral_record"]["checkable_ref"])       # none given: no change
         self.assertEqual((r["word_class"], r["shape"]), ("JUDGMENT", "xamgu"))
         self.assertEqual(r["status"], "DERIVED")                   # the verdict's own tag
         # the provenance belongs to ka'u only
@@ -221,18 +225,19 @@ class TestV1(unittest.TestCase):
         self.assertEqual(wc.ORAL_CHECKS, ("shared", "multi_gen", "checkable", "not_central"))
 
     def test_kau_one_check_n_is_proposed(self):
-        for name in self.ORAL:
+        for name in self.FOUR:
             row = dict(self.ORAL, **{name: "n"})
             r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
             self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "PROPOSED"), name)
             self.assertEqual(r["oral_record"]["not_met"], [name])
             self.assertIsNone(r["claim_provenance"])               # no oral provenance claimed
         r = claim("better", self.BETTER, evidential="ka'u",
-                  oral_record=dict.fromkeys(self.ORAL, "n"))
+                  oral_record=dict(dict.fromkeys(self.FOUR, "n"), answered_by="the carrier"))
         self.assertEqual(r["claim_status"], "PROPOSED")
 
     def test_kau_wrong_check_name_is_degraded(self):
-        row = {"shared": "y", "multi_gen": "y", "checkable": "y", "famous": "y"}
+        row = {"shared": "y", "multi_gen": "y", "checkable": "y", "famous": "y",
+               "answered_by": "the carrier"}
         r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
         self.assertEqual((r["verdict"], r["pass_equivalent"]), ("DEGRADED", False))
         m = {x["name"]: x for x in r["degraded"]["missing"]}
@@ -252,7 +257,8 @@ class TestV1(unittest.TestCase):
         self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["checkable"]))
         r = claim("better", self.BETTER, evidential="ka'u")
         self.assertEqual((r["verdict"], r["missing_required"]),
-                         ("DEGRADED", ["shared", "multi_gen", "checkable", "not_central"]))
+                         ("DEGRADED", ["shared", "multi_gen", "checkable", "not_central",
+                                       "answered_by"]))
         # an answer that is not y / n, or a row that is not a table: a bad tag, VOID
         for bad in (dict(self.ORAL, shared="maybe"), dict(self.ORAL, shared=True),
                     ["y", "y", "y", "y"], "yes"):
@@ -260,6 +266,76 @@ class TestV1(unittest.TestCase):
                                    oral_record=bad)["verdict"], "VOID", bad)
         r = claim("better", self.BETTER, evidential="hearsay", oral_record=self.ORAL)
         self.assertEqual(r["verdict"], "VOID")                     # not a way round hearsay
+
+    def test_kau_needs_answered_by(self):
+        row = {k: v for k, v in self.ORAL.items() if k != "answered_by"}
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
+        self.assertEqual((r["verdict"], r["pass_equivalent"]), ("DEGRADED", False))
+        self.assertEqual(r["missing_required"], ["answered_by"])
+        m = r["degraded"]["missing"][0]
+        self.assertEqual((m["name"], m["kind"]), ("answered_by", "oral_record"))
+        self.assertIn("who answered the four checks", m["reason"])
+        self.assertEqual((r["claim_status"], r["claim_provenance"]), ("PROPOSED", None))
+        for empty in ("", "   "):
+            r = claim("better", self.BETTER, evidential="ka'u",
+                      oral_record=dict(row, answered_by=empty))
+            self.assertEqual(r["missing_required"], ["answered_by"], repr(empty))
+        r = claim("better", self.BETTER, evidential="ka'u",
+                  oral_record=dict(row, answered_by="a" * 41))       # X(40)
+        self.assertEqual(r["verdict"], "VOID")
+        self.assertIn("would truncate", r["void_reason"])
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=dict(row, answered_by=7))
+        self.assertEqual(r["verdict"], "VOID")
+        # with it, whole again; and it is not counted as a fifth check
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=self.ORAL)
+        self.assertEqual((r["verdict"], r["oral_record"]["answered_by"]), ("PASS", "the carrier"))
+        self.assertEqual(r["oral_record"]["other_names"], [])
+
+    def test_kau_checkable_ref_is_re_read(self):
+        import tempfile
+        from infer import record_sha
+        from numcheck import check_all as numcheck_all
+        val = lambda v, u: {"value": v, "unit": u}                 # noqa: E731
+        with tempfile.TemporaryDirectory() as d:
+            report = numcheck_all([{"formula": "F = m*a", "values": {
+                "F": val("7.5", "N"), "m": val("2.5", "kg"), "a": val(3, "m/s**2")}}])
+            (Path(d) / "report.json").write_text(json.dumps(report))
+            ref = {"file": "report.json", "record": 0,
+                   "sha256": record_sha(report["records"][0])}
+
+            def run(oral):
+                return check_claim({"word": "better", "slots": self.BETTER,
+                                    "evidential": "ka'u", "oral_record": oral}, WORDS,
+                                   base_dir=d)
+            r = run(dict(self.ORAL, checkable_ref=ref))            # re-read and equal
+            self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))
+            c = r["oral_record"]["checkable_ref"]
+            self.assertEqual((c["state"], c["sha256"], c["verdict_read"]),
+                             ("RE_READ", ref["sha256"], "HOLDS"))
+            # mismatch: the sha256 of something else
+            r = run(dict(self.ORAL, checkable_ref=dict(ref, sha256="0" * 64)))
+            self.assertEqual((r["verdict"], r["missing_required"]),
+                             ("DEGRADED", ["checkable_ref"]))
+            self.assertIn("sha256 mismatch", r["degraded"]["missing"][0]["reason"])
+            self.assertEqual((r["claim_status"], r["claim_provenance"]), ("PROPOSED", None))
+            self.assertEqual(r["oral_record"]["checkable_ref"]["state"], "NOT_RE_READ")
+            # the file is edited after the reference was taken
+            changed = json.loads(json.dumps(report))
+            changed["records"][0]["verdict"] = "FAILS"
+            (Path(d) / "report.json").write_text(json.dumps(changed))
+            self.assertEqual(run(dict(self.ORAL, checkable_ref=ref))["verdict"], "DEGRADED")
+            # the file is not there, the record is not there, the reference is malformed
+            for bad, why in ((dict(ref, file="none.json"), "cannot read"),
+                             (dict(ref, record=9), "no record 9"),
+                             (dict(ref, branch="2b"), "undeclared field"),
+                             ({"file": "report.json"}, "needs file and sha256"),
+                             ("report.json", "not a {file, record, sha256}")):
+                r = run(dict(self.ORAL, checkable_ref=bad))
+                self.assertEqual(r["verdict"], "DEGRADED", bad)
+                self.assertIn(why, r["degraded"]["missing"][0]["reason"])
+            # absent: no change at all
+            r = run(self.ORAL)
+            self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))
 
     def test_classes_and_shapes_in_table_v0(self):
         got = {w: (e.get("class"), e.get("shape")) for w, e in WORDS.items()}

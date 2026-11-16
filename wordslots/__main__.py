@@ -28,7 +28,7 @@ def main(argv):
     except (OSError, ValueError, IndexError) as e:
         print(f"cannot read input: {e}", file=sys.stderr)
         return 2
-    rep = check_all(claims, table, argv[1], str(tpath))
+    rep = check_all(claims, table, argv[1], str(tpath), Path(argv[1]).resolve().parent)
     if "--json" in argv:
         print(json.dumps(rep, indent=1, default=str))
     else:

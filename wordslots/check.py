@@ -21,7 +21,9 @@ picture, is VOID ("would truncate"): nothing is ever cut to fit.
     magnitude           {"value": S9(7)V9(4), "unit": X(12)}
     evidential  X(10)   how the claimant knows (below)
     speaker     X(40)   who is making the claim
-    oral_record         for ka'u: {shared, multi_gen, checkable, not_central}, each y / n
+    oral_record         for ka'u: {shared, multi_gen, checkable, not_central}, each y / n;
+                        answered_by X(40), who answered them (required);
+                        checkable_ref {file, record, sha256} (optional, re-read)
     source      X(40)   who or what the claim comes from
     source_path X(80)   where the claim was found
     table               which table entry status the claimant relied on
@@ -38,8 +40,9 @@ EVIDENTIAL -> STATUS of the claim, carried, never upgraded:
                  shared, multi_gen, checkable, not_central, each y / n.
                  All y -> OBSERVED, with provenance {transmission: oral,
                  multi_generation: true, relay: holder}. Any n -> PROPOSED.
-                 A check not answered, or another name in the row -> DEGRADED,
-                 naming it.                      (Lojban: cultural knowledge)
+                 A check not answered, another name in the row, no
+                 answered_by, or a checkable_ref that does not re-read ->
+                 DEGRADED, naming it.            (Lojban: cultural knowledge)
   no evidential given -> the claim's status stays null.
   The meanings of se'o, ja'o and ka'u are recalled, not checked against a
   Lojban source here.
@@ -67,11 +70,14 @@ numcheck: value = midpoint within tolerance half-width, units first. A
 filling's "is" names which range it claims. No numeric value given -> the
 bound is UNCHECKED, which is not a pass of the bound.
 """
+import json
 from fractions import Fraction
+from pathlib import Path
 
+from infer.ladder import record_sha
 from numcheck.check import Bad, check_point, to_interval
 
-VERSION = "wordslots branch4-2"
+VERSION = "wordslots branch4-3"
 RECORD_FIELDS = ("word", "slots", "reading", "magnitude", "evidential", "speaker",
                  "oral_record", "source", "source_path", "table")
 FILLING_FIELDS = ("text", "value", "unit", "status", "is")
@@ -85,9 +91,11 @@ EVIDENTIAL = {"observed": "OBSERVED", "concluded": "DERIVED", "hearsay": "PROPOS
               "ja'o": "DERIVED", "se'o": "OBSERVED", "ka'u": None}
 SELF_WORDS = ("i", "me", "myself")
 WIDTHS = {"word": 20, "slot_text": 40, "reading": 8, "unit": 12, "evidential": 10,
-          "speaker": 40, "source": 40, "source_path": 80, "range_name": 20}
+          "speaker": 40, "source": 40, "source_path": 80, "range_name": 20,
+          "answered_by": 40}
 MAGNITUDE_PIC = {"picture": "S9(7)V9(4)", "integer_digits": 7, "decimal_digits": 4}
 ORAL_CHECKS = ("shared", "multi_gen", "checkable", "not_central")
+ORAL_EXTRA = ("answered_by", "checkable_ref")
 ORAL_PROVENANCE = {"transmission": "oral", "multi_generation": True, "relay": "holder"}
 
 
@@ -215,34 +223,99 @@ def _range_check(word, slot, filling, magnitude, source_path):
     return out
 
 
-def _oral_record(rec_in):
-    """ka'u: the oral-record discriminator row, four checks fixed by name, each
-    y / n. Returns (claim status, detail, problems). A problem is a missing
-    check or a name that is not one of the four: the claim is then DEGRADED,
-    naming it. Raises Void on a malformed record or an answer that is not y / n."""
+def _find_record(report, record):
+    """A record of a JSON report by index, label or id. Raises Void."""
+    if not isinstance(report, dict):
+        raise Void("the file is not a report")
+    if isinstance(record, int) and not isinstance(record, bool):
+        rows = report.get("records")
+        if isinstance(rows, list) and 0 <= record < len(rows):
+            return rows[record]
+        raise Void(f"no record {record} in the file")
+    if isinstance(record, str):
+        for part, key in (("theorem_records", "label"), ("records", "id"),
+                          ("hypotheses", "id"), ("proposals", "id")):
+            for r in report.get(part) or []:
+                if isinstance(r, dict) and r.get(key) == record:
+                    return r
+        raise Void(f"no record {record!r} in the file")
+    raise Void("record must be an index or a name")
+
+
+def read_checkable_ref(ref, base_dir):
+    """Re-read the record a checkable_ref names: file opened, record found,
+    sha256 compared. Returns the detail; raises Void with the reason."""
+    if not isinstance(ref, dict):
+        raise Void("checkable_ref is not a {file, record, sha256} record")
+    extra = [k for k in ref if k not in ("file", "record", "sha256")]
+    if extra:
+        raise Void(f"checkable_ref has an undeclared field {extra[0]!r}")
+    if not isinstance(ref.get("file"), str) or not isinstance(ref.get("sha256"), str):
+        raise Void("checkable_ref needs file and sha256")
+    path = Path(ref["file"])
+    if not path.is_absolute():
+        path = Path(base_dir or ".") / path
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise Void(f"cannot read {ref['file']}: {type(e).__name__}")
+    rec = _find_record(report, ref.get("record"))
+    got = record_sha(rec)
+    if got != ref["sha256"].lower():
+        raise Void("sha256 mismatch: the record is not the one the reference names")
+    return {"state": "RE_READ", "file": ref["file"], "record": ref.get("record"),
+            "sha256": got, "verdict_read": rec.get("verdict", rec.get("kernel_verdict"))
+            if isinstance(rec, dict) else None,
+            "note": "the record exists and is unchanged; whether it bears on the account "
+                    "is the claimant's statement"}
+
+
+def _oral_record(rec_in, base_dir=None):
+    """ka'u: the oral-record discriminator row. Four checks fixed by name, each
+    y / n; answered_by, who answered them (required); checkable_ref, optional,
+    re-read when given. Returns (claim status, detail, problems). A problem is
+    a missing check, a missing answered_by, a name that is not declared, or a
+    checkable_ref that does not re-read: the claim is then DEGRADED, naming it.
+    Raises Void on a malformed record or an answer that is not y / n."""
     if rec_in is None:
         rec_in = {}
     elif not isinstance(rec_in, dict):
         raise Void("oral_record is not a {check: y / n} table")
-    for name, met in rec_in.items():
+    answered_by = rec_in.get("answered_by")
+    if answered_by is not None and not isinstance(answered_by, str):
+        raise Void("oral_record: answered_by is not text")
+    fits(answered_by, "answered_by", "oral_record answered_by")
+    checks = {n: v for n, v in rec_in.items() if n not in ORAL_EXTRA}
+    for name, met in checks.items():
         if met not in ("y", "n"):
             raise Void(f"oral_record: check {name!r} is answered {met!r}, not y or n")
-    other = [n for n in rec_in if n not in ORAL_CHECKS]
-    absent = [n for n in ORAL_CHECKS if n not in rec_in]
+    other = [n for n in checks if n not in ORAL_CHECKS]
+    absent = [n for n in ORAL_CHECKS if n not in checks]
     problems = [(n, "oral-record check not answered") for n in absent] \
         + [(n, "not one of the four oral-record checks: " + ", ".join(ORAL_CHECKS))
            for n in other]
-    unmet = [n for n in ORAL_CHECKS if rec_in.get(n) == "n"]
+    if _empty(answered_by):
+        problems.append(("answered_by", "oral_record does not say who answered the four checks"))
+    ref_detail = None
+    if rec_in.get("checkable_ref") is not None:
+        try:
+            ref_detail = read_checkable_ref(rec_in["checkable_ref"], base_dir)
+        except Void as v:
+            ref_detail = {"state": "NOT_RE_READ", "reason": v.reason,
+                          "checkable_ref": rec_in["checkable_ref"]}
+            problems.append(("checkable_ref", "checkable_ref does not re-read: " + v.reason))
+    unmet = [n for n in ORAL_CHECKS if checks.get(n) == "n"]
     all_met = not problems and not unmet
-    detail = {"checks": {n: rec_in.get(n) for n in ORAL_CHECKS}, "all_met": all_met,
+    detail = {"checks": {n: checks.get(n) for n in ORAL_CHECKS}, "all_met": all_met,
+              "answered_by": answered_by, "checkable_ref": ref_detail,
               "not_met": unmet, "not_answered": absent, "other_names": other,
               "reason": "all four checks met" if all_met else
               "a check is not met: " + ", ".join(unmet) if unmet and not problems else
-              "the discriminator row is incomplete or has another name in it"}
+              "the discriminator row is incomplete: " + ", ".join(n for n, _ in problems)}
     return ("OBSERVED" if all_met else "PROPOSED"), detail, problems
 
 
-def check_claim(claim, words, index=None, input_path=None):
+def check_claim(claim, words, index=None, input_path=None, base_dir=None):
     get = claim.get if isinstance(claim, dict) else (lambda *_: None)
     prov = {"source_path": get("source_path"), "input": input_path, "index": index,
             "tool": VERSION}
@@ -352,11 +425,12 @@ def check_claim(claim, words, index=None, input_path=None):
                      entry["slots"][0].get("role"))
         elif ev == "ka'u":
             rec["claim_status"], rec["oral_record"], problems = \
-                _oral_record(claim.get("oral_record"))
+                _oral_record(claim.get("oral_record"), base_dir)
             for name, reason in problems:
                 lack(name, "oral_record", reason)
             if rec["claim_status"] == "OBSERVED":
-                rec["claim_provenance"] = dict(ORAL_PROVENANCE)
+                rec["claim_provenance"] = dict(ORAL_PROVENANCE,
+                                               answered_by=rec["oral_record"]["answered_by"])
         elif ev is not None:
             rec["claim_status"] = EVIDENTIAL[ev]              # carried as mapped, never upgraded
         if ev != "ka'u" and claim.get("oral_record") is not None:
@@ -441,14 +515,15 @@ def check_claim(claim, words, index=None, input_path=None):
     return rec
 
 
-def check_all(claims, table, input_path=None, table_path=None):
+def check_all(claims, table, input_path=None, table_path=None, base_dir=None):
     entries = claims.get("claims") if isinstance(claims, dict) and "claims" in claims else claims
     if not isinstance(entries, list):
         entries = [entries]
     names = ("PASS", "DEGRADED", "FAIL", "UNDECIDED", "VOID")
     try:
         words = read_table(table)
-        records = [check_claim(c, words, i, input_path) for i, c in enumerate(entries)]
+        records = [check_claim(c, words, i, input_path, base_dir)
+                   for i, c in enumerate(entries)]
         table_void = None
     except Void as v:                            # a bad table voids every claim
         table_void = v.reason

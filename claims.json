@@ -109,7 +109,8 @@
     "shared": "y",
     "multi_gen": "y",
     "checkable": "y",
-    "not_central": "y"
+    "not_central": "y",
+    "answered_by": "the carrier"
    },
    "source": "told by the carrier"
   }
