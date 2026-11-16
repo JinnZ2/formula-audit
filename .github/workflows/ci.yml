@@ -18,3 +18,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python3 -m unittest discover -s tests
+      # README claim hunt: lists README examples not yet in the register (informational)
+      - run: python3 tests/test_readme_claims.py --hunt

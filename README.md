@@ -19,6 +19,27 @@ and are not built.
 
 License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
 
+In plain words: small checkers for formulas and claims. `unitaudit` asks whether
+both sides of a formula have the same physical dimensions. `kernel` checks
+Metamath proofs step by step. `numcheck` asks whether a formula holds at given
+values, and lets only exact interval arithmetic decide. `wordslots`, `infer`
+and `glyph` (branches 4, 5 and 3) carry claims, rival hypotheses and next steps
+with their status tags. Each one records what it could not establish (VOID,
+UNDECIDED, UNCHECKED) instead of guessing.
+
+Try it (Python 3, nothing to install):
+
+```sh
+python3 -m unittest discover -s tests
+python3 -m unitaudit check formulas.json
+python3 -m numcheck check checks.json
+```
+
+Before relying on a result, read [READING_NOTES.md](READING_NOTES.md): it lists
+the misreads a careful outside reader has already made. Concrete examples in
+this README are checked against the code by `tests/test_readme_claims.py`;
+`python3 tests/test_readme_claims.py --hunt` lists the ones not yet checked.
+
 ## Branches
 
 ```text
@@ -220,8 +241,17 @@ Limits of branch 2b
 ```text
 fast          a triage prediction rests on a margin rule (1e-9, or 10^-(prec/2),
               times the largest magnitude met). It is a heuristic with no bound
-              over a long chain of steps: (1e16 + 1) - 1e16 = 1 is predicted FAILS
-              by the float tier. Only --fast lets it stand, marked rigorous: false.
+              over a long chain of steps. Example (tests/test_numcheck.py):
+              y = ((a + b) - a)*c with a = 1e16, b = 3, c = 1e10, y = 3e10 holds
+              exactly, but binary64 reads (1e16 + 3) - 1e16 as 4 and the float tier
+              predicts FAILS; Decimal predicts HOLDS, the interval tier confirms
+              HOLDS and the float miss is logged. Only --fast lets a prediction
+              stand, marked rigorous: false.
+constants     a number-only expression is folded to an exact Fraction from the
+              source text before any tier runs, so (1e16 + 1) - 1e16 = 1 is exact
+              at every tier (HOLDS, rigorous; no prediction). The cancellation
+              hazard needs symbols; without the factor c the guard reads
+              (a + b) - a as "too close to call" instead of mispredicting.
 tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x = x**2 on
               x in [0, 1] is UNDECIDED at tolerance 0 (the two enclosures differ; the
               dependency problem), since bisection narrows the gap without closing it.
@@ -647,4 +677,9 @@ affine temperature    degC vs K: an offset is not a dimension; both read as Thet
 angle                 rad is dimensionless here, so a dropped or extra angle factor
                       (omega*t against f*t) does not show, and a torque and an
                       energy read alike
+today                 km, eV and degC are not in the unit table, so a check using
+                      them comes back VOID (unknown unit), not PASS. The lines above
+                      say what a table without scale factors or offsets cannot see
+                      if such units are added; rad, torque and energy already read
+                      alike today.
 ```
