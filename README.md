@@ -566,12 +566,13 @@ places.json   word -> ordered slots (name, role, required, status tag, optional 
                    property, x4 by what amount (optional)
               better / appropriate: x1, x2 for whom, x3 by standard      JUDGMENT (xamgu)
 claims.json   fixed record with declared widths: word, slots, reading, magnitude,
-              evidential, speaker, oral_record, source, source_path, table
+              evidential, speaker, oral_record, source_id, source_path, table
                       |
    unknown word / undeclared field or slot / bad tag     ---> VOID
    a value longer than its width, a number past S9(7)V9(4) ---> VOID ("would truncate")
                       |
-   something required is missing (a slot, the reading of an EMOTIVE word, a magnitude)
+   something required is missing (a slot, the reading of an EMOTIVE word, a magnitude,
+   the source)
         ---> DEGRADED: what is filled is kept and usable; each missing item listed
              with name, reason, provenance. Not a PASS; pass_equivalent: false.
                       |
@@ -604,13 +605,19 @@ evidential    how the claimant knows, mapped to the claim's own status and carri
                       given, it is re-read (file opened, record found, sha256
                       compared) and a mismatch -> DEGRADED.
               none given -> null. A PASS never upgrades it.
+source        one rule for every route: a claim names where it comes from.
+                written (any evidential but se'o and ka'u, or none)   source_id
+                oral (ka'u)                                oral_record.answered_by
+                self-report (se'o)                         the speaker, filled in
+              the one that applies is required; missing -> DEGRADED, naming it, with
+              the same record shape on either route (kind "source")
 status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
               table_entry_status is the place-table entry's, PROPOSED until the
               holder of the word confirms it; the checker never changes a tag.
 emotive       an EMOTIVE word needs its reading, PHYSICAL or SOCIAL; a PHYSICAL
               reading of "warm" needs a magnitude with its unit
 widths        word X(20), slot text X(40), reading X(8), unit X(12), evidential X(10),
-              speaker X(40), source X(40), source_path X(80); magnitude S9(7)V9(4).
+              speaker X(40), source_id X(40), source_path X(80); magnitude S9(7)V9(4).
               Nothing is ever cut to fit.
 ranges        "bounds" {lo, hi, unit} on a slot, and named "ranges" (a name standing
               for a range of values, as a COBOL 88 level does); a filling's "is"
@@ -637,9 +644,8 @@ oral record     the four checks are answered y / n by the person named in answer
                 written out in this repository. A checkable_ref is confirmed to
                 exist and be unchanged; whether that record bears on the account is
                 the claimant's statement.
-source          a claim's "source" is NOT required today: a hearsay or observed claim
-                with no source still PASSes. An oral claim (ka'u) must name who
-                answered. The two are not yet held to the same rule.
+source          the checker confirms that a source is NAMED. It does not look the source
+                up, and it does not judge whether the source is a good one.
 self-report     "the speaker" is matched by text: x1 empty, or "I" / "me" / "myself",
                 or the speaker's name. Nothing checks that a se'o claim really is
                 about an inner state.

@@ -17,6 +17,10 @@ FULL = {"x1": "the bridge", "x2": "collapse under a 3 t load", "x3": "pedestrian
 
 
 def claim(word, slots, **kw):
+    """A claim with a source_id, unless the test passes source_id=None."""
+    kw.setdefault("source_id", "a stated source")
+    if kw["source_id"] is None:
+        del kw["source_id"]
     return check_claim({"word": word, "slots": slots, **kw}, WORDS)
 
 
@@ -76,16 +80,16 @@ class TestClaims(unittest.TestCase):
         self.assertEqual(claim("safe", None)["missing_required"], ["x1", "x2", "x3"])
 
     def test_fully_filled_passes(self):
-        r = claim("safe", FULL, evidential="observed", source="inspection report 12")
+        r = claim("safe", FULL, evidential="observed", source_id="inspection report 12")
         self.assertEqual((r["verdict"], r["status"]), ("PASS", "DERIVED"))
         self.assertEqual(r["missing_required"], [])
-        self.assertEqual(r["source"], "inspection report 12")
+        self.assertEqual(r["source_id"], "inspection report 12")
         self.assertEqual(r["table_entry_status"], "PROPOSED")      # the table's tag rides along
         self.assertIsNone(r["human_interest"])
         self.assertIsNone(r["ai_interest"])
 
     def test_hearsay_is_carried_not_upgraded(self):
-        r = claim("safe", FULL, evidential="hearsay", source="a neighbour")
+        r = claim("safe", FULL, evidential="hearsay", source_id="a neighbour")
         self.assertEqual(r["verdict"], "PASS")
         self.assertEqual(r["status"], "DERIVED")                   # the verdict's status
         self.assertEqual((r["evidential"], r["claim_status"]), ("hearsay", "PROPOSED"))
@@ -119,10 +123,10 @@ class TestClaims(unittest.TestCase):
             self.assertEqual(check_claim(bad, WORDS)["verdict"], "VOID", bad)
         self.assertEqual(set(RECORD_FIELDS),
                          {"word", "slots", "reading", "magnitude", "evidential", "speaker",
-                          "oral_record", "source", "source_path", "table"})
+                          "oral_record", "source_id", "source_path", "table"})
         for bad in ({"reading": "WARMISH"}, {"evidential": "za'a'a"},
                     {"magnitude": {"value": "1", "weight": 2}}, {"oral_record": {}}):
-            r = check_claim({"word": "safe", "slots": FULL, **bad}, WORDS)
+            r = check_claim({"word": "safe", "slots": FULL, "source_id": "s", **bad}, WORDS)
             self.assertEqual(r["verdict"], "VOID", bad)          # a bad tag stays VOID
 
     def test_optional_slot_may_stay_void(self):
@@ -137,7 +141,7 @@ class TestV1(unittest.TestCase):
         # "the water is warm": what is warm is given, and that a temperature is meant;
         # the standard and the magnitude are not
         r = claim("warm", {"x1": "the water"}, reading="PHYSICAL", evidential="hearsay",
-                  source="a sign by the pool")
+                  source_id="a sign by the pool")
         self.assertEqual((r["verdict"], r["status"], r["pass_equivalent"]),
                          ("DEGRADED", "DERIVED", False))
         self.assertEqual(r["missing_required"], ["x2", "magnitude"])
@@ -273,8 +277,9 @@ class TestV1(unittest.TestCase):
         self.assertEqual((r["verdict"], r["pass_equivalent"]), ("DEGRADED", False))
         self.assertEqual(r["missing_required"], ["answered_by"])
         m = r["degraded"]["missing"][0]
-        self.assertEqual((m["name"], m["kind"]), ("answered_by", "oral_record"))
-        self.assertIn("who answered the four checks", m["reason"])
+        self.assertEqual((m["name"], m["kind"]), ("answered_by", "source"))
+        self.assertEqual(m["reason"], "no source: an oral claim names where it comes from in "
+                                      "oral_record.answered_by")
         self.assertEqual((r["claim_status"], r["claim_provenance"]), ("PROPOSED", None))
         for empty in ("", "   "):
             r = claim("better", self.BETTER, evidential="ka'u",
@@ -337,6 +342,69 @@ class TestV1(unittest.TestCase):
             r = run(self.ORAL)
             self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))
 
+    def test_written_claim_needs_a_source_id(self):
+        r = claim("safe", FULL, evidential="hearsay", source_id=None)
+        self.assertEqual((r["verdict"], r["status"], r["pass_equivalent"]),
+                         ("DEGRADED", "DERIVED", False))
+        self.assertEqual(r["missing_required"], ["source_id"])
+        m = r["degraded"]["missing"][0]
+        self.assertEqual((m["name"], m["kind"]), ("source_id", "source"))
+        self.assertEqual(m["reason"],
+                         "no source: a written claim names where it comes from in source_id")
+        self.assertEqual(r["usable"]["slots"], FULL)               # the claim is kept
+        self.assertEqual(r["source_kind"], "written")
+        for empty in ("", "   "):
+            r = claim("safe", FULL, evidential="observed", source_id=empty)
+            self.assertEqual(r["missing_required"], ["source_id"], repr(empty))
+        r = claim("safe", FULL, source_id=None)                    # no evidential at all
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["source_id"]))
+        # with a source_id: unchanged
+        for ev in ("observed", "hearsay", "concluded", "opinion", "defined", "ja'o", None):
+            r = claim("safe", FULL, evidential=ev, source_id="report 12")
+            self.assertEqual((r["verdict"], r["pass_equivalent"], r["source_id"]),
+                             ("PASS", True, "report 12"), ev)
+        # the old field name is not a declared field any more
+        r = check_claim({"word": "safe", "slots": FULL, "source": "report 12"}, WORDS)
+        self.assertEqual(r["verdict"], "VOID")
+        self.assertIn("undeclared field: 'source'", r["void_reason"])
+
+    def test_self_report_needs_no_source(self):
+        r = claim("warm", None, evidential="se'o", speaker="Ana", source_id=None)
+        self.assertEqual((r["verdict"], r["pass_equivalent"]), ("PASS", True))
+        self.assertEqual((r["source_id"], r["source_kind"]), ("Ana", "self"))   # = the speaker
+        self.assertTrue(r["source_auto_filled"])
+        self.assertNotIn("source_id", r["missing_required"])
+        # external se'o is DEGRADED for its scope, and still not for a source
+        r = claim("hostile", {"x1": "she"}, evidential="se'o", speaker="Ana", source_id=None)
+        self.assertEqual(r["verdict"], "DEGRADED")
+        self.assertNotIn("source_id", r["missing_required"])
+
+    def test_oral_claim_needs_no_source_id(self):
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=self.ORAL,
+                  source_id=None)
+        self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))
+        self.assertEqual((r["source_id"], r["source_kind"]), ("the carrier", "oral"))
+
+    def test_missing_source_has_the_same_shape_on_both_routes(self):
+        written = claim("better", self.BETTER, evidential="hearsay", source_id=None)
+        row = {k: v for k, v in self.ORAL.items() if k != "answered_by"}
+        oral = claim("better", self.BETTER, evidential="ka'u", oral_record=row, source_id=None)
+        for r in (written, oral):
+            self.assertEqual((r["verdict"], r["status"], r["pass_equivalent"]),
+                             ("DEGRADED", "DERIVED", False))
+            self.assertEqual(len(r["degraded"]["missing"]), 1)
+            self.assertEqual(r["degraded"]["kept"], ["x1", "x2", "x3"])
+            self.assertEqual(r["usable"]["slots"], self.BETTER)
+            self.assertEqual(r["located_error"]["slot"], r["missing_required"][0])
+        mw, mo = written["degraded"]["missing"][0], oral["degraded"]["missing"][0]
+        self.assertEqual(sorted(mw), sorted(mo))                   # the same keys
+        self.assertEqual((mw["kind"], mo["kind"]), ("source", "source"))
+        self.assertEqual(mw["provenance"], mo["provenance"])
+        self.assertEqual((mw["name"], mo["name"]), ("source_id", "answered_by"))
+        self.assertTrue(mw["reason"].startswith("no source: a written claim"))
+        self.assertTrue(mo["reason"].startswith("no source: an oral claim"))
+        self.assertEqual(sorted(written), sorted(oral))            # the records' keys too
+
     def test_classes_and_shapes_in_table_v0(self):
         got = {w: (e.get("class"), e.get("shape")) for w, e in WORDS.items()}
         self.assertEqual(got["more"], ("COMPARATIVE", "zmadu"))
@@ -381,7 +449,7 @@ class TestV1(unittest.TestCase):
         self.assertIn("more than 4 decimal places", r["void_reason"])
         r = claim("warm", whole, reading="PHYSICAL", magnitude={"value": "1.2345", "unit": "K"})
         self.assertNotEqual(r["verdict"], "VOID")
-        for field, n in (("source", 40), ("speaker", 40), ("source_path", 80)):
+        for field, n in (("source_id", 40), ("speaker", 40), ("source_path", 80)):
             self.assertEqual(claim("safe", FULL, **{field: "a" * n})["verdict"], "PASS")
             r = claim("safe", FULL, **{field: "a" * (n + 1)})
             self.assertIn("would truncate", r["void_reason"], field)
@@ -452,10 +520,15 @@ class TestCli(unittest.TestCase):
         self.assertEqual(self.cli("check", "nope.json").returncode, 2)
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "c.json"
-            f.write_text(json.dumps([{"word": "safe", "slots": FULL}]))
+            ok = {"word": "safe", "slots": FULL, "source_id": "report 12"}
+            f.write_text(json.dumps([ok]))
             self.assertEqual(self.cli("check", str(f)).returncode, 0)
-            f.write_text(json.dumps([{"word": "safe", "slots": FULL},
-                                     {"word": "safe", "slots": {"x1": "a"}}]))
+            f.write_text(json.dumps([{"word": "safe", "slots": FULL}]))       # no source
+            r = self.cli("check", str(f))
+            self.assertEqual(r.returncode, 3)
+            self.assertIn("missing: source_id (no source: a written claim", r.stdout)
+            f.write_text(json.dumps([ok, {"word": "safe", "slots": {"x1": "a"},
+                                          "source_id": "report 12"}]))
             r = self.cli("check", str(f))
             self.assertEqual(r.returncode, 3)
             self.assertIn("missing: x2 (required slot empty); x3 (required slot empty)",
@@ -464,7 +537,8 @@ class TestCli(unittest.TestCase):
             t = Path(d) / "t.json"
             t.write_text(json.dumps({"words": {"tall": {"status": "OBSERVED", "slots": [
                 {"name": "x1", "role": "who", "required": True, "status": "OBSERVED"}]}}}))
-            f.write_text(json.dumps([{"word": "tall", "slots": {"x1": "the tower"}}]))
+            f.write_text(json.dumps([{"word": "tall", "slots": {"x1": "the tower"},
+                                      "source_id": "survey"}]))
             r = self.cli("check", str(f), "--table", str(t), "--json")
             self.assertEqual(r.returncode, 0)
             self.assertEqual(json.loads(r.stdout)["records"][0]["table_entry_status"], "OBSERVED")

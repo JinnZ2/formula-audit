@@ -24,7 +24,7 @@ picture, is VOID ("would truncate"): nothing is ever cut to fit.
     oral_record         for ka'u: {shared, multi_gen, checkable, not_central}, each y / n;
                         answered_by X(40), who answered them (required);
                         checkable_ref {file, record, sha256} (optional, re-read)
-    source      X(40)   who or what the claim comes from
+    source_id   X(40)   who or what the claim comes from (see SOURCE below)
     source_path X(80)   where the claim was found
     table               which table entry status the claimant relied on
 
@@ -47,11 +47,19 @@ EVIDENTIAL -> STATUS of the claim, carried, never upgraded:
   The meanings of se'o, ja'o and ka'u are recalled, not checked against a
   Lojban source here.
 
+SOURCE: every claim names where it comes from, by one rule for all routes.
+    a written claim (any evidential but se'o and ka'u, or none)   source_id
+    an oral claim (ka'u)                          oral_record.answered_by
+    a self-report (se'o)                          the speaker, filled in
+  The one that applies is required; missing -> DEGRADED, naming it, with the
+  same shape whichever route it is (kind "source").
+
 VERDICT (status DERIVED; VOID has none):
     PASS       every required slot filled, nothing undeclared, and every
                numeric bound that was checked holds
     DEGRADED   something required is missing (a slot, the reading of an
-               EMOTIVE word, a magnitude, a speaker, an oral-record check), or
+               EMOTIVE word, a magnitude, a speaker, a source, an oral-record
+               check), or
                se'o is applied to something external. What is filled is kept and usable; each
                missing item is listed with its name, its reason and where it
                came from. DEGRADED is not PASS and must not be read as one.
@@ -77,9 +85,9 @@ from pathlib import Path
 from infer.ladder import record_sha
 from numcheck.check import Bad, check_point, to_interval
 
-VERSION = "wordslots branch4-3"
+VERSION = "wordslots branch4-4"
 RECORD_FIELDS = ("word", "slots", "reading", "magnitude", "evidential", "speaker",
-                 "oral_record", "source", "source_path", "table")
+                 "oral_record", "source_id", "source_path", "table")
 FILLING_FIELDS = ("text", "value", "unit", "status", "is")
 SLOT_FIELDS = ("name", "role", "required", "status", "bounds", "ranges")
 WORD_FIELDS = ("status", "class", "shape", "slots", "magnitude_required_for")
@@ -91,11 +99,12 @@ EVIDENTIAL = {"observed": "OBSERVED", "concluded": "DERIVED", "hearsay": "PROPOS
               "ja'o": "DERIVED", "se'o": "OBSERVED", "ka'u": None}
 SELF_WORDS = ("i", "me", "myself")
 WIDTHS = {"word": 20, "slot_text": 40, "reading": 8, "unit": 12, "evidential": 10,
-          "speaker": 40, "source": 40, "source_path": 80, "range_name": 20,
+          "speaker": 40, "source_id": 40, "source_path": 80, "range_name": 20,
           "answered_by": 40}
 MAGNITUDE_PIC = {"picture": "S9(7)V9(4)", "integer_digits": 7, "decimal_digits": 4}
 ORAL_CHECKS = ("shared", "multi_gen", "checkable", "not_central")
 ORAL_EXTRA = ("answered_by", "checkable_ref")
+SOURCE_REASON = "no source: {route} claim names where it comes from in {field}"
 ORAL_PROVENANCE = {"transmission": "oral", "multi_generation": True, "relay": "holder"}
 
 
@@ -295,7 +304,7 @@ def _oral_record(rec_in, base_dir=None):
         + [(n, "not one of the four oral-record checks: " + ", ".join(ORAL_CHECKS))
            for n in other]
     if _empty(answered_by):
-        problems.append(("answered_by", "oral_record does not say who answered the four checks"))
+        problems.append(("answered_by", "no source"))
     ref_detail = None
     if rec_in.get("checkable_ref") is not None:
         try:
@@ -327,7 +336,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
            "evidential": get("evidential"), "claim_status": None, "claim_provenance": None,
            "scope": None,
            "speaker": get("speaker"), "oral_record": None,
-           "source": get("source"), "table_entry_status": None,
+           "source_id": get("source_id"), "source_kind": None, "table_entry_status": None,
            "provenance": prov, "human_interest": None, "ai_interest": None}
     try:
         if not isinstance(claim, dict):
@@ -340,7 +349,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
         if not isinstance(word, str) or not word.strip():
             raise Void("no word")
         fits(word, "word", "word")
-        for f in ("speaker", "source", "source_path", "evidential", "reading"):
+        for f in ("speaker", "source_id", "source_path", "evidential", "reading"):
             if claim.get(f) is not None and not isinstance(claim[f], str):
                 raise Void(f"{f} is not text")
             fits(claim.get(f), f, f)
@@ -427,7 +436,13 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             rec["claim_status"], rec["oral_record"], problems = \
                 _oral_record(claim.get("oral_record"), base_dir)
             for name, reason in problems:
-                lack(name, "oral_record", reason)
+                if name == "answered_by":
+                    lack(name, "source", SOURCE_REASON.format(
+                        route="an oral", field="oral_record.answered_by"))
+                else:
+                    lack(name, "oral_record", reason)
+            rec["source_kind"] = "oral"
+            rec["source_id"] = rec["oral_record"]["answered_by"] or claim.get("source_id")
             if rec["claim_status"] == "OBSERVED":
                 rec["claim_provenance"] = dict(ORAL_PROVENANCE,
                                                answered_by=rec["oral_record"]["answered_by"])
@@ -435,6 +450,16 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             rec["claim_status"] = EVIDENTIAL[ev]              # carried as mapped, never upgraded
         if ev != "ka'u" and claim.get("oral_record") is not None:
             raise Void("oral_record is for the evidential ka'u only")
+        if ev == "se'o":
+            rec["source_kind"] = "self"                    # the source is the speaker
+            if _empty(claim.get("source_id")) and not _empty(claim.get("speaker")):
+                rec["source_id"] = claim["speaker"]
+                rec["source_auto_filled"] = True
+        elif ev != "ka'u":
+            rec["source_kind"] = "written"
+            if _empty(claim.get("source_id")):
+                lack("source_id", "source", SOURCE_REASON.format(
+                    route="a written", field="source_id"))
 
         # ---- slots ----
         rows = []

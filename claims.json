@@ -7,7 +7,7 @@
     "x1": "the bridge"
    },
    "evidential": "opinion",
-   "source": "example"
+   "source_id": "example"
   },
   {
    "word": "safe",
@@ -17,7 +17,7 @@
     "x3": "pedestrians"
    },
    "evidential": "hearsay",
-   "source": "a neighbour"
+   "source_id": "a neighbour"
   },
   {
    "word": "warm",
@@ -31,8 +31,8 @@
     }
    },
    "evidential": "observed",
-   "source": "thermometer reading",
-   "reading": "PHYSICAL"
+   "reading": "PHYSICAL",
+   "source_id": "thermometer reading"
   },
   {
    "word": "warm",
@@ -46,8 +46,8 @@
     }
    },
    "evidential": "observed",
-   "source": "thermometer reading",
-   "reading": "PHYSICAL"
+   "reading": "PHYSICAL",
+   "source_id": "thermometer reading"
   },
   {
    "word": "warm",
@@ -80,13 +80,13 @@
    },
    "reading": "PHYSICAL",
    "evidential": "hearsay",
-   "source": "a sign by the pool"
+   "source_id": "a sign by the pool"
   },
   {
    "word": "warm",
    "evidential": "se'o",
    "speaker": "Ana",
-   "source": "Ana"
+   "source_id": "Ana"
   },
   {
    "word": "hostile",
@@ -95,7 +95,7 @@
    },
    "evidential": "se'o",
    "speaker": "Ana",
-   "source": "Ana"
+   "source_id": "Ana"
   },
   {
    "word": "better",
@@ -112,7 +112,7 @@
     "not_central": "y",
     "answered_by": "the carrier"
    },
-   "source": "told by the carrier"
+   "source_id": "told by the carrier"
   }
  ]
 }
