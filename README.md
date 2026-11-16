@@ -121,8 +121,12 @@ PASS            the proof follows from the database's axioms by the Metamath rul
 not supported   include statements ($[ $]): file-level VOID
 not checked     comment markup, label character rules, line length, the
                 "definition soundness" conventions of set.mm
-tests           hand-written databases only (tests/data/prop.mm and inline);
+tests           hand-written databases only (tests/data/prop.mm, dv.mm and inline);
                 set.mm is not in this repository and not run by CI
+planted faults  python3 -m kernel.setmm_check path/to/set.mm  (by hand, not CI):
+                one-letter proof mutations and single $d deletions on a slice;
+                a deletion that still reads PASS is listed, not hidden: a $d can
+                be stated without the proof needing it
 phone           no phone timing was taken; see the run notes in the commit that
                 added this section for timings on the build machine
 ```

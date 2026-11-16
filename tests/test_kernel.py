@@ -107,6 +107,44 @@ class TestFail(unittest.TestCase):
         self.assertEqual(t["same"]["located_error"]["got"], "x in both")
         self.assertEqual(t["same"]["located_error"]["step"], 3)
 
+    def test_dv_violation_is_located(self):
+        # 1a: a substitution that breaks a $d -> FAIL at the step that applies it
+        text = (ROOT / "tests" / "data" / "dv.mm").read_text()
+        rep = run(text)
+        t = by_label(rep)
+        self.assertEqual(rep["counts"], {"PASS": 2, "FAIL": 3, "VOID": 0})
+        self.assertEqual(t["good"]["verdict"], "PASS")
+        self.assertEqual(t["good2"]["verdict"], "PASS")
+        e = t["no-dv"]["located_error"]           # same proof as good, its $d line gone
+        self.assertEqual((t["no-dv"]["verdict"], t["no-dv"]["status"]), ("FAIL", "DERIVED"))
+        self.assertEqual((e["step"], e["step_label"]), (3, "ax-ex"))
+        self.assertEqual(e["rule"], "disjoint variables x y")
+        self.assertEqual((e["expected"], e["got"]), ("$d y z in effect", "no such $d"))
+        e = t["same-var"]["located_error"]        # x := y and y := y share y
+        self.assertEqual((e["step"], e["step_label"]), (3, "ax-ex"))
+        self.assertEqual((e["expected"], e["got"]), ("no shared variable", "y in both"))
+        e = t["inside"]["located_error"]          # y := ( z + z ) contains x := z
+        self.assertEqual((e["step"], e["step_label"]), (5, "ax-ex"))
+        self.assertEqual(e["got"], "z in both")
+
+    def test_deleting_a_needed_dv_fails(self):
+        # 1b on hand data: remove the one $d line the proof of `good` needs
+        from kernel.setmm_check import dv_deletions, mutations
+        import random
+        text = (ROOT / "tests" / "data" / "dv.mm").read_text()
+        out = dv_deletions(text, 50, random.Random(0))
+        self.assertEqual(out["candidates_in_slice"], 3)
+        self.assertEqual(out["counts"]["FAIL"], 1)          # good's $d y z: needed
+        self.assertEqual(out["counts"]["PASS"], 2)          # good2: either line covers
+        self.assertEqual(sorted(p["deleted"] for p in out["passes"]),
+                         ["$d y z $.", "$d z y $."])
+        self.assertEqual({p["line"] for p in out["passes"]}, {16})
+        self.assertEqual(out["fails_not_located_as_disjoint_variables"], [])
+        self.assertEqual(out["first_fails"][0]["theorem"], "good")
+        m = mutations(PROP, 40, random.Random(0))           # the only compressed proof: idc
+        self.assertEqual(m["counts"]["PASS"], 0)
+        self.assertEqual(m["counts"]["FAIL"] + m["counts"]["VOID"], 40)
+
     def test_compressed_broken(self):
         good = "AAABZBFAACAFABBAFBFBAFCAFADEE"
         self.assertIn(good, PROP)
