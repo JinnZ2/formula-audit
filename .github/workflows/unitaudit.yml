@@ -1,0 +1,29 @@
+# unitaudit tests. Co-authored. Named for the package so it sits beside any
+# other workflow in this repository without replacing it.
+name: unitaudit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: tests
+        run: python3 -m unittest discover -s tests -v
+      - name: example input (3 PASS, 2 FAIL, 1 VOID -> exit 1 is the expected result)
+        run: |
+          set +e
+          python3 -m unitaudit check formulas.json
+          code=$?
+          set -e
+          test "$code" -eq 1

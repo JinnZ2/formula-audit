@@ -6,8 +6,9 @@ scanner is a placeholder. Three known blind spots are listed under Limits and
 are not built. Repository: JinnZ2/formula-audit. Licence: CC0, as the
 repository's. Co-authored.
 
-This file sits inside the package so the repository's own README, LICENSE
-and CI stay as their author wrote them. When this branch was pushed
+This file sits inside the package so the repository's own README and
+LICENSE stay as their author wrote them. The one workflow added with this
+package is `.github/workflows/unitaudit.yml`; it touches no other workflow. When this branch was pushed
 (2026-11-16) the remote had no branch and no files; none of those three
 were present to read.
 
@@ -61,7 +62,8 @@ Limits
 PASS                  means the dimensions agree, not that the formula is right
 unit table            SI base, N J W Pa Hz V C ohm T Wb, dimensionless; anything else is VOID
 stdlib used           ast, fractions, json, plus sys and pathlib (CLI, scanner), unittest
-python                written for 3.10 syntax; run here on 3.11, 3.12, 3.13, not on 3.10
+python                3.10 to 3.13 run by .github/workflows/unitaudit.yml; see the
+                      workflow's own runs for whether 3.10 passes
 ```
 
 Known blind spots, not built
