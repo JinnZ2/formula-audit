@@ -8,7 +8,9 @@ only. Branch 2b (data points and intersections) is implemented and passes its
 own tests within tested scope; only its interval tier is rigorous. The seam
 from 2b's proposals to the 2a kernel is implemented, with no proof search and a
 hand-written axiom file that has not been reviewed. Branch 4
-(word slots) is implemented and passes its own tests within tested scope; its
+(word slots) and branch 5 (inference ladder) are implemented and pass their own
+tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
+case uses constructed numbers. Branch 4's
 shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
 is defined below in words only: nothing of it is built or tested. Three known
 blind spots of branch 1 are listed below
@@ -26,6 +28,8 @@ branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers
 branch 3   glyph           (no code)    DEFINED in this README, status PROPOSED; not built
 branch 4   word slots      wordslots/   BUILT: place table, claim records, slot check;
                                         numeric slot bounds handed to branch 2b
+branch 5   inference       infer/       BUILT: rival hypotheses, typed evidence with caps,
+           ladder                       exact posteriors, direction signal for branch 3
 ```
 
 A void branch stays void. It is not filled in to make the list look complete.
@@ -452,6 +456,71 @@ UNCHECKED       a bound with no numeric value is not checked and the claim can s
                 PASS; the record says UNCHECKED
 defined         its map to OBSERVED is a choice made here, not given in the order
 not built       claims with more than one word, nesting, negation
+```
+
+## Branch 5: inference ladder
+
+Weighs rival hypotheses against each other and says which way the evidence is
+moving. It feeds the direction ranking of branch 3; it decides nothing.
+
+```text
+case.json   hypotheses (>= 2 rivals; one alone -> VOID), each with prior + source
+            a prior flagged normalization / superiority / convenience / unknown
+              -> the whole set goes to a flat prior; the flag is logged
+            evidence: type, likelihood ratio (Fraction), provenance, shared_ancestry
+            tags, the evidence's own status tag
+                 |
+   direct        bears on one hypothesis; may carry a 2a / 2b check
+   shadow        must list alternative casters; LR capped (3); updates the CLASS of
+                 hypotheses it is consistent with, not one
+   cross_domain  must declare its constraints, each matched or not; any unmatched
+                 -> no update; LR capped (2)
+   shared ancestry with earlier evidence on the same hypothesis -> only the strongest counts
+                 |
+   posterior per rival, exact (Fractions)       every step logged with its factor;
+                 |                              a step can be reversed; replay(log)
+                 v                              gives the same posteriors
+   direction   RISING     raised by >= 2 evidence types with no shared ancestry
+               STACKED    raised more than once by one type only: logged, no signal
+               NO_SIGNAL  otherwise
+   status      inference alone: at most PROPOSED. DERIVED only with direct evidence
+               that carries a passing check from 2a (PASS) or 2b (HOLDS / BOTH_HOLD)
+               and is itself OBSERVED or DERIVED.
+```
+
+```sh
+python3 -m infer rank case_snow.json [--json] [--log FILE]
+# exit 0 ranked, every evidence record usable | 3 case VOID or an evidence record VOID | 2 usage
+```
+
+Worked case, `case_snow.json` (Broad Street, 1854; miasma against water):
+
+```text
+FLAT_PRIOR  miasma's 9/10 is flagged normalization -> 1/2 each
+APPLY       pump_cluster    shadow        lr 8 -> 3 (capped) on water
+APPLY       spared_groups   direct        lr 5 on water
+NO_UPDATE   handle_removed  direct        same inquiry as spared_groups, not stronger
+NO_UPDATE   poison_analogy  cross_domain  a declared constraint is not matched
+water   15/16   RISING (direct + shadow)   status PROPOSED
+miasma   1/16   NO_SIGNAL                  status PROPOSED
+```
+
+Limits of branch 5
+
+```text
+numbers       the worked case's priors and likelihood ratios are CONSTRUCTED for the
+              example. They are not estimates from the historical record and nothing
+              here is a finding about cholera.
+caps          3 for shadow and 2 for cross_domain are PROPOSED defaults, not derived
+              from anything; each run logs the caps it used and where they came from
+inputs        a likelihood ratio, a constraint marked matched, a shared_ancestry tag
+              and a check verdict are all taken as given. Nothing here verifies them:
+              an untagged common source is counted twice.
+flat prior    one flagged prior flattens the whole set (a prior is a statement about
+              the rivals together); that reading is a choice made here
+RISING        means two independent kinds of evidence point the same way. It is not
+              a verdict on the hypothesis.
+exit code 1   not used: nothing in this branch FAILS
 ```
 
 ## Limits (branch 1)

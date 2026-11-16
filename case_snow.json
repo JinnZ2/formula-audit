@@ -1,0 +1,28 @@
+{"note": "worked case for infer: Broad Street, 1854. The likelihood ratios and priors are CONSTRUCTED for the example. They are not estimates from the historical record, and nothing here is a finding about cholera.",
+ "hypotheses": [
+  {"id": "miasma", "statement": "the disease is carried by bad air",
+   "prior": "9/10", "prior_source": "the received medical opinion of the time",
+   "prior_flag": "normalization",
+   "note": "the prior is high because the view was the norm, not because of evidence weighed here"},
+  {"id": "water", "statement": "the disease is carried by contaminated water",
+   "prior": "1/10", "prior_source": "a minority view at the time"}
+ ],
+ "evidence": [
+  {"id": "pump_cluster", "type": "shadow", "lr": "8",
+   "consistent_with": ["water"],
+   "alternative_casters": ["a local source of bad air near the pump", "more people living near the pump"],
+   "provenance": "map of deaths around the Broad Street pump", "shared_ancestry": ["death_map"],
+   "status": "OBSERVED"},
+  {"id": "spared_groups", "type": "direct", "hypothesis": "water", "lr": "5",
+   "provenance": "groups nearby with their own water supply were largely spared",
+   "shared_ancestry": ["inquiry_1854"], "status": "OBSERVED"},
+  {"id": "handle_removed", "type": "direct", "hypothesis": "water", "lr": "2",
+   "provenance": "deaths fell after the pump handle was removed",
+   "shared_ancestry": ["inquiry_1854"], "status": "OBSERVED",
+   "note": "same inquiry as spared_groups: not independent of it"},
+  {"id": "poison_analogy", "type": "cross_domain", "hypothesis": "water", "lr": "4",
+   "constraints": [{"name": "the agent enters by the mouth", "matched": true},
+                   {"name": "more consumed, more harm", "matched": false}],
+   "provenance": "pattern carried over from poisoning cases", "shared_ancestry": [],
+   "status": "PROPOSED"}
+ ]}
