@@ -5,7 +5,9 @@ tested scope. Its slots (limit, sign, magnitude range) are recorded, NOT
 checked. Its scanner is a placeholder. Branch 2a (proof kernel) is implemented
 and passes its own tests within tested scope; it reads Metamath databases
 only. Branch 2b (data points and intersections) is implemented and passes its
-own tests within tested scope; only its interval tier is rigorous. Branch 4
+own tests within tested scope; only its interval tier is rigorous. The seam
+from 2b's proposals to the 2a kernel is implemented, with no proof search and a
+hand-written axiom file that has not been reviewed. Branch 4
 (word slots) is implemented and passes its own tests within tested scope; its
 shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
 is defined below in words only: nothing of it is built or tested. Three known
@@ -235,6 +237,75 @@ units         branch 1's blind spots carry over: no scale factors, so values are
 powers        integer exponents and 1/2 only; exponent must be a literal number
 sin, cos      arguments within +-1000
 not built     relative tolerance, inequalities (< <=), more than two formulas
+```
+
+## Seam: proposals.json -> kernel
+
+Status: implemented and passing its own tests within tested scope. No proof
+search is built: a proof has to be written by someone and put in a file. The
+database `tests/data/algebra.mm` was written by hand here and has not been
+reviewed by anyone else.
+
+```text
+numcheck --proposals proposals.json       identity candidates: {lhs, rhs, domain, status, ...}
+        |
+        v
+python3 -m kernel prove proposals.json
+   reader       a file that is not a proposals file -> VOID, nothing read, nothing written
+                a malformed entry -> VOID, reported, left unchanged
+   id           first 16 hex digits of sha256 over [lhs, rhs, domain]
+   translator   lhs = rhs on the domain -> a statement over tests/data/algebra.mm
+                  x*x = x**2 on x in [0, 1]  ->  |- ( v0 * v0 ) = ( v0 ^ 2 )
+                                                 hypotheses |- 0 <_ v0 ,  |- v0 <_ 1
+                untranslatable -> VOID with the reason, entry unchanged
+   proof file   proofs/<id>.mm exists?
+                  no  -> the entry stays as it was; reason NO_PROOF
+                  yes -> database + proof file -> the kernel
+                           PASS -> status DERIVED, proof "kernel"
+                           FAIL -> the entry stays as it was; located step logged
+   write-back   proposals.json updated in place; per entry an append-only history
+                (timestamp, route, from, to) and an append-only list of kernel checks
+```
+
+```sh
+python3 -m kernel prove proposals.json [--proofs DIR] [--db FILE.mm] [--json] [--dry-run]
+# exit 0 every entry DERIVED, nothing failed or VOID | 1 a kernel FAIL
+#      3 no FAIL; a VOID, or an entry still PROPOSED (NO_PROOF) | 2 usage
+```
+
+```text
+rests on      a kernel PASS says the proof follows from the axioms of algebra.mm by
+              the Metamath rules. Those axioms are GIVEN INPUT: tagged OBSERVED, with
+              no verdict, exactly as set.mm's axioms are in branch 2a. The PASS rests
+              on them and says nothing about them.
+proof file    $e and $p statements and ${ $} only. A file that declares anything
+              ($a $c $v $f $d) is VOID. One $p is labelled "target": its statement
+              must be the translated one, and its $e hypotheses must be among the
+              translated domain bounds. Lemmas ($p) are allowed; all must PASS.
+two routes    an entry already DERIVED by polynomial_identity_by_points is left as it
+              is. A kernel PASS is added beside it: routes lists both, as two
+              independent checks.
+withdrawn     a kernel route whose proof no longer checks is withdrawn: the entry goes
+              back to PROPOSED if that was its only route. The history keeps both
+              changes; nothing is deleted.
+translatable  numbers 0 to 9, -n, p/q; + - * /; ** 0 to 9; ** (1/2) and sqrt(); unary
+              minus; at most 8 domain variables. A symbol held at a fixed value is
+              written as that numeral, so the statement is about that value only.
+```
+
+Limits of the seam
+
+```text
+no search       nothing here looks for a proof
+axioms          algebra.mm is small and hand-written (equality, field axioms for
+                + - * /, order, sqrt on 0 <_ t, powers 0 to 9). Not reviewed. An
+                unsound axiom would make every PASS against it worthless.
+not in it       exp log sin cos tan abs, integers above 9, decimals other than p/q
+                with small p and q: untranslatable -> VOID
+domain          the bounds become hypotheses the proof MAY use; the statement is
+                not weakened or strengthened beyond them
+units           the statement is about numbers; the units on the proposal are not
+                part of what is proved
 ```
 
 ## Glyph (branch 3 reasoning operator)
