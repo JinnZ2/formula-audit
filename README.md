@@ -12,7 +12,8 @@ hand-written axiom file audited by one reader (second reader: VOID). Branch 4
 tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
 case uses constructed numbers. Branch 4's
 shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
-is defined below in words only: nothing of it is built or tested. Three known
+is implemented as a v0 that passes its own tests within tested scope; its tool
+table is four PROPOSED tools and nothing it writes is above PROPOSED. Three known
 blind spots of branch 1 are listed below
 and are not built.
 
@@ -25,7 +26,8 @@ branch 1   unit audit      unitaudit/   BUILT: dimension check, PASS / FAIL / VO
 branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof verifier
 branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers, point
                                          checks, intersections over a box
-branch 3   glyph           (no code)    DEFINED in this README, status PROPOSED; not built
+branch 3   glyph           glyph/       BUILT (v0): gate, options with inaction drift cost,
+                                        one step at a time; tool table v0, all PROPOSED
 branch 4   word slots      wordslots/   BUILT: place table, claim records, slot check;
                                         numeric slot bounds handed to branch 2b
 branch 5   inference       infer/       BUILT: rival hypotheses, typed evidence with caps,
@@ -334,8 +336,10 @@ units           the statement is about numbers; the units on the proposal are no
 
 ## Glyph (branch 3 reasoning operator)
 
-Status: PROPOSED. A definition in words. No code, no test, no run stands
-behind this section.
+Status: the definition below is PROPOSED. `glyph/` implements it as a v0 that
+passes its own tests within tested scope (see "What is built" at the end of
+this section). The tool table is four PROPOSED tools; whether they are the
+right tools, or useful, is not established.
 
 **What it is.** A compressed reasoning operator, in the way a differential
 equation is a compressed statement of how something changes. The mark is
@@ -424,6 +428,76 @@ four is already in that literature was not checked: the claim is PROPOSED.
 
 **Provenance.** The concept comes from an oral tradition and is given here in
 translation. The tribe is not named. Co-authored (human + AI).
+
+**What is built** (`glyph/`, v0).
+
+```text
+case.json   purpose {mode: SOLVE | EXPLORE, target}; environment: references
+            {branch, file, record, sha256, at} to records of branches 1 / 2a / 2b / 4 / 5;
+            energy_budget and time_budget {available, reserve}; needed_function_met
+            y / n / VOID; now; drift_rate
+                 |
+   input     no purpose -> VOID (never defaulted). Every reference is RE-READ: file
+             opened, record found, sha256 compared; one that does not check -> VOID.
+   gate      EXPLORE only if needed_function_met = y AND energy available > reserve
+             AND time available > reserve. Any n -> SOLVE. Anything VOID -> VOID,
+             naming which. Asked again at every step.
+   options   tools whose needed features are in the environment, affordable, and not
+             yet used on that instance; and inaction, always.
+             cost(inaction) = drift_rate x time since the newest environment record.
+             No drift_rate, or a cost that comes to 0 -> VOID: nothing is ranked.
+   SOLVE     each open option is a rival "this option moves toward the target";
+             ranked by branch 5 posterior x 1 / cost. All rivals recorded.
+   EXPLORE   the first tool, in table order, with a feature present and unpaired;
+             none -> inaction.
+   one step  the tool turns one feature instance into one candidate, written to
+             proposals.json (status PROPOSED, tagged SOLVE or EXPLORE); the
+             environment is read again; the next step starts from the new state.
+   log       every step: gate, options with why each is open or closed, rivals,
+             choice, candidate, state before and after. replay(log) reproduces the
+             final state and the candidates.
+```
+
+```sh
+python3 -m glyph step case.json [--steps N] [--json] [--dry-run]
+python3 -m glyph ref 2b report.json 0 3      # an environment reference: sha256 + time
+# exit 0 every step done | 3 a step is VOID | 2 usage
+```
+
+Tool table v0, every entry PROPOSED:
+
+```text
+tool                 needs (environment feature)                     candidate
+dimensional_analogy  shared_dims: two branch-1 PASS records with     rhs of one = rhs of the
+                     the same dimension                              other, as a question
+boundary_probe       mixed_region: a branch-2b record that is MIXED  lhs - rhs = tolerance on the
+                                                                     region between a holding
+                                                                     and a failing piece
+conjugate_map        conjugate_exponents: exponents p, q with        ( base ** p ) ** q = base
+                     p * q = 1 in branch-1 / 2b formulas
+slot_fill_audit      void_slots: a branch-4 record with a VOID slot  a question naming the slots
+```
+
+Limits of the v0
+
+```text
+ceiling        nothing the glyph writes is above PROPOSED. It runs no check itself;
+               a candidate goes further only through 2b and then 2a.
+candidates     are questions made by a fixed rule from one record or a pair. Many
+               will be false or empty: m*c**2 = m*v**2/2 is what dimensional_analogy
+               proposes from two energy formulas. That is the intended reading.
+seam           a candidate with bounds such as 49/10 is VOID at the 2b -> 2a seam
+               (algebra.mm has numerals 0 to 9 only); slot questions are kept in a
+               separate "questions" list that the seam does not read
+physics        the environment's "physics" is only the two budgets and the drift
+               rate here; no physical constraint on a step is modelled
+tool effects   a tool's cost and time are numbers in the table; nothing measures them
+SOLVE          "moves toward the target" is what the case's evidence claims; the target
+               text itself is recorded and not interpreted
+drift          one rate for the whole environment; the rate is an input, not measured
+tools          four, chosen to touch branches 1, 2b and 4; branch 2a and branch 5
+               records can be referenced but no v0 tool reads a feature from them
+```
 
 ## Branch 4: word slots
 
