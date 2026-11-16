@@ -1,5 +1,5 @@
 {
- "note": "place table v1: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. The Lojban shapes named in 'shape' (glare, snura, jibni, zmadu, xamgu) are recalled, not checked against a Lojban source: CARRIED.",
+ "note": "place table v1: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. The Lojban shapes named in 'shape' (glare, snura, jibni, zmadu, xamgu) are recalled, not checked against a Lojban source.",
  "holder": null,
  "words": {
   "warm": {

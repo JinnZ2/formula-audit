@@ -21,7 +21,7 @@ picture, is VOID ("would truncate"): nothing is ever cut to fit.
     magnitude           {"value": S9(7)V9(4), "unit": X(12)}
     evidential  X(10)   how the claimant knows (below)
     speaker     X(40)   who is making the claim
-    oral_record         for ka'u: exactly four checks, each {"name", "met": "y" / "n"}
+    oral_record         for ka'u: {shared, multi_gen, checkable, not_central}, each y / n
     source      X(40)   who or what the claim comes from
     source_path X(80)   where the claim was found
     table               which table entry status the claimant relied on
@@ -34,8 +34,12 @@ EVIDENTIAL -> STATUS of the claim, carried, never upgraded:
                  scope "speaker's own state only": x1 is filled with the
                  speaker, and the other places are the speaker's own and are
                  waived. se'o on anything external -> DEGRADED.
-    ka'u      -> CARRIED if all four oral-record checks are met; any "n", or
-                 no oral_record -> PROPOSED      (Lojban: cultural knowledge)
+    ka'u      -> the oral-record discriminator row: four checks fixed by name,
+                 shared, multi_gen, checkable, not_central, each y / n.
+                 All y -> OBSERVED, with provenance {transmission: oral,
+                 multi_generation: true, relay: holder}. Any n -> PROPOSED.
+                 A check not answered, or another name in the row -> DEGRADED,
+                 naming it.                      (Lojban: cultural knowledge)
   no evidential given -> the claim's status stays null.
   The meanings of se'o, ja'o and ka'u are recalled, not checked against a
   Lojban source here.
@@ -44,8 +48,8 @@ VERDICT (status DERIVED; VOID has none):
     PASS       every required slot filled, nothing undeclared, and every
                numeric bound that was checked holds
     DEGRADED   something required is missing (a slot, the reading of an
-               EMOTIVE word, a magnitude, a speaker), or se'o is applied to
-               something external. What is filled is kept and usable; each
+               EMOTIVE word, a magnitude, a speaker, an oral-record check), or
+               se'o is applied to something external. What is filled is kept and usable; each
                missing item is listed with its name, its reason and where it
                came from. DEGRADED is not PASS and must not be read as one.
     FAIL       a numeric slot value lies outside its declared bounds (located)
@@ -67,7 +71,7 @@ from fractions import Fraction
 
 from numcheck.check import Bad, check_point, to_interval
 
-VERSION = "wordslots branch4-1"
+VERSION = "wordslots branch4-2"
 RECORD_FIELDS = ("word", "slots", "reading", "magnitude", "evidential", "speaker",
                  "oral_record", "source", "source_path", "table")
 FILLING_FIELDS = ("text", "value", "unit", "status", "is")
@@ -83,7 +87,8 @@ SELF_WORDS = ("i", "me", "myself")
 WIDTHS = {"word": 20, "slot_text": 40, "reading": 8, "unit": 12, "evidential": 10,
           "speaker": 40, "source": 40, "source_path": 80, "range_name": 20}
 MAGNITUDE_PIC = {"picture": "S9(7)V9(4)", "integer_digits": 7, "decimal_digits": 4}
-ORAL_CHECKS = 4
+ORAL_CHECKS = ("shared", "multi_gen", "checkable", "not_central")
+ORAL_PROVENANCE = {"transmission": "oral", "multi_generation": True, "relay": "holder"}
 
 
 class Void(Exception):
@@ -211,27 +216,30 @@ def _range_check(word, slot, filling, magnitude, source_path):
 
 
 def _oral_record(rec_in):
-    """ka'u: exactly four checks, each named and met y / n. Returns
-    (claim status, detail). Raises Void on a malformed record."""
+    """ka'u: the oral-record discriminator row, four checks fixed by name, each
+    y / n. Returns (claim status, detail, problems). A problem is a missing
+    check or a name that is not one of the four: the claim is then DEGRADED,
+    naming it. Raises Void on a malformed record or an answer that is not y / n."""
     if rec_in is None:
-        return "PROPOSED", {"given": False, "checks": None, "all_met": False,
-                            "reason": "no oral_record: the four checks were not made"}
-    if not isinstance(rec_in, list) or len(rec_in) != ORAL_CHECKS:
-        raise Void(f"oral_record needs exactly {ORAL_CHECKS} checks")
-    names = []
-    for c in rec_in:
-        if not isinstance(c, dict) or not isinstance(c.get("name"), str) \
-                or not c["name"].strip() or c.get("met") not in ("y", "n") \
-                or any(k not in ("name", "met", "note") for k in c):
-            raise Void("oral_record: each check needs name and met y / n")
-        names.append(c["name"])
-    if len(set(names)) != ORAL_CHECKS:
-        raise Void("oral_record: the four checks must be four different checks")
-    unmet = [c["name"] for c in rec_in if c["met"] == "n"]
-    return ("CARRIED" if not unmet else "PROPOSED"), {
-        "given": True, "checks": rec_in, "all_met": not unmet, "not_met": unmet,
-        "reason": "all four checks met: carried as it came" if not unmet
-        else "a check is not met: " + ", ".join(unmet)}
+        rec_in = {}
+    elif not isinstance(rec_in, dict):
+        raise Void("oral_record is not a {check: y / n} table")
+    for name, met in rec_in.items():
+        if met not in ("y", "n"):
+            raise Void(f"oral_record: check {name!r} is answered {met!r}, not y or n")
+    other = [n for n in rec_in if n not in ORAL_CHECKS]
+    absent = [n for n in ORAL_CHECKS if n not in rec_in]
+    problems = [(n, "oral-record check not answered") for n in absent] \
+        + [(n, "not one of the four oral-record checks: " + ", ".join(ORAL_CHECKS))
+           for n in other]
+    unmet = [n for n in ORAL_CHECKS if rec_in.get(n) == "n"]
+    all_met = not problems and not unmet
+    detail = {"checks": {n: rec_in.get(n) for n in ORAL_CHECKS}, "all_met": all_met,
+              "not_met": unmet, "not_answered": absent, "other_names": other,
+              "reason": "all four checks met" if all_met else
+              "a check is not met: " + ", ".join(unmet) if unmet and not problems else
+              "the discriminator row is incomplete or has another name in it"}
+    return ("OBSERVED" if all_met else "PROPOSED"), detail, problems
 
 
 def check_claim(claim, words, index=None, input_path=None):
@@ -243,7 +251,8 @@ def check_claim(claim, words, index=None, input_path=None):
            "word_class": None, "shape": None,
            "slots": None, "missing_required": [], "degraded": None, "usable": None,
            "ranges": [], "reading": get("reading"), "magnitude": get("magnitude"),
-           "evidential": get("evidential"), "claim_status": None, "scope": None,
+           "evidential": get("evidential"), "claim_status": None, "claim_provenance": None,
+           "scope": None,
            "speaker": get("speaker"), "oral_record": None,
            "source": get("source"), "table_entry_status": None,
            "provenance": prov, "human_interest": None, "ai_interest": None}
@@ -342,7 +351,12 @@ def check_claim(claim, words, index=None, input_path=None):
                                   "something external needs another evidential",
                      entry["slots"][0].get("role"))
         elif ev == "ka'u":
-            rec["claim_status"], rec["oral_record"] = _oral_record(claim.get("oral_record"))
+            rec["claim_status"], rec["oral_record"], problems = \
+                _oral_record(claim.get("oral_record"))
+            for name, reason in problems:
+                lack(name, "oral_record", reason)
+            if rec["claim_status"] == "OBSERVED":
+                rec["claim_provenance"] = dict(ORAL_PROVENANCE)
         elif ev is not None:
             rec["claim_status"] = EVIDENTIAL[ev]              # carried as mapped, never upgraded
         if ev != "ka'u" and claim.get("oral_record") is not None:

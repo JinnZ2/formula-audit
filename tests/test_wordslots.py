@@ -121,7 +121,7 @@ class TestClaims(unittest.TestCase):
                          {"word", "slots", "reading", "magnitude", "evidential", "speaker",
                           "oral_record", "source", "source_path", "table"})
         for bad in ({"reading": "WARMISH"}, {"evidential": "za'a'a"},
-                    {"magnitude": {"value": "1", "weight": 2}}, {"oral_record": []}):
+                    {"magnitude": {"value": "1", "weight": 2}}, {"oral_record": {}}):
             r = check_claim({"word": "safe", "slots": FULL, **bad}, WORDS)
             self.assertEqual(r["verdict"], "VOID", bad)          # a bad tag stays VOID
 
@@ -199,28 +199,67 @@ class TestV1(unittest.TestCase):
         r = claim("safe", dict(FULL, x1="that location"), evidential="se'o", speaker="Ana")
         self.assertEqual(r["verdict"], "DEGRADED")                 # external, though all filled
 
-    ORAL = [{"name": f"check {i}", "met": "y"} for i in range(1, 5)]
+    ORAL = {"shared": "y", "multi_gen": "y", "checkable": "y", "not_central": "y"}
+    BETTER = {"x1": "the new route", "x2": "night drivers", "x3": "hours of rest kept"}
 
-    def test_kau_passing_all_four_is_not_demoted(self):
-        better = {"x1": "the new route", "x2": "night drivers", "x3": "hours of rest kept"}
-        r = claim("better", better, evidential="ka'u", oral_record=self.ORAL)
-        self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "CARRIED"))
+    def test_kau_passing_all_four_is_observed_with_provenance(self):
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=self.ORAL)
+        self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "OBSERVED"))   # not demoted
+        self.assertEqual(r["claim_provenance"], {"transmission": "oral",
+                                                 "multi_generation": True, "relay": "holder"})
         self.assertTrue(r["oral_record"]["all_met"])
+        self.assertEqual(r["oral_record"]["checks"], self.ORAL)
         self.assertEqual((r["word_class"], r["shape"]), ("JUDGMENT", "xamgu"))
-        one_n = [dict(c) for c in self.ORAL]
-        one_n[2]["met"] = "n"
-        r = claim("better", better, evidential="ka'u", oral_record=one_n)
-        self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "PROPOSED"))
-        self.assertEqual(r["oral_record"]["not_met"], ["check 3"])
-        r = claim("better", better, evidential="ka'u")             # the checks were not made
+        self.assertEqual(r["status"], "DERIVED")                   # the verdict's own tag
+        # the provenance belongs to ka'u only
+        self.assertIsNone(claim("better", self.BETTER, evidential="observed")["claim_provenance"])
+        self.assertEqual(claim("better", self.BETTER, evidential="ja'o")["claim_status"],
+                         "DERIVED")
+        # CARRIED is no longer a status value anywhere in the checker
+        import wordslots.check as wc
+        self.assertNotIn("CARRIED", (ROOT / "wordslots" / "check.py").read_text())
+        self.assertEqual(wc.ORAL_CHECKS, ("shared", "multi_gen", "checkable", "not_central"))
+
+    def test_kau_one_check_n_is_proposed(self):
+        for name in self.ORAL:
+            row = dict(self.ORAL, **{name: "n"})
+            r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
+            self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", "PROPOSED"), name)
+            self.assertEqual(r["oral_record"]["not_met"], [name])
+            self.assertIsNone(r["claim_provenance"])               # no oral provenance claimed
+        r = claim("better", self.BETTER, evidential="ka'u",
+                  oral_record=dict.fromkeys(self.ORAL, "n"))
         self.assertEqual(r["claim_status"], "PROPOSED")
-        for bad in (self.ORAL[:3], self.ORAL + self.ORAL[:1], [dict(self.ORAL[0])] * 4,
-                    [{"name": "a", "met": "maybe"}] * 4, "yes"):
-            self.assertEqual(claim("better", better, evidential="ka'u",
-                                   oral_record=bad)["verdict"], "VOID")
-        r = claim("better", better, evidential="hearsay", oral_record=self.ORAL)
+
+    def test_kau_wrong_check_name_is_degraded(self):
+        row = {"shared": "y", "multi_gen": "y", "checkable": "y", "famous": "y"}
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
+        self.assertEqual((r["verdict"], r["pass_equivalent"]), ("DEGRADED", False))
+        m = {x["name"]: x for x in r["degraded"]["missing"]}
+        self.assertEqual(sorted(m), ["famous", "not_central"])     # both are named
+        self.assertEqual(m["not_central"]["reason"], "oral-record check not answered")
+        self.assertIn("not one of the four", m["famous"]["reason"])
+        self.assertEqual(m["famous"]["kind"], "oral_record")
+        self.assertEqual((r["claim_status"], r["claim_provenance"]), ("PROPOSED", None))
+        self.assertEqual(r["usable"]["slots"], self.BETTER)        # the claim's slots are kept
+        # an extra name beside the four right ones is still named
+        r = claim("better", self.BETTER, evidential="ka'u",
+                  oral_record=dict(self.ORAL, famous="y"))
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["famous"]))
+        # a check left out, and no row at all
+        row = {k: v for k, v in self.ORAL.items() if k != "checkable"}
+        r = claim("better", self.BETTER, evidential="ka'u", oral_record=row)
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["checkable"]))
+        r = claim("better", self.BETTER, evidential="ka'u")
+        self.assertEqual((r["verdict"], r["missing_required"]),
+                         ("DEGRADED", ["shared", "multi_gen", "checkable", "not_central"]))
+        # an answer that is not y / n, or a row that is not a table: a bad tag, VOID
+        for bad in (dict(self.ORAL, shared="maybe"), dict(self.ORAL, shared=True),
+                    ["y", "y", "y", "y"], "yes"):
+            self.assertEqual(claim("better", self.BETTER, evidential="ka'u",
+                                   oral_record=bad)["verdict"], "VOID", bad)
+        r = claim("better", self.BETTER, evidential="hearsay", oral_record=self.ORAL)
         self.assertEqual(r["verdict"], "VOID")                     # not a way round hearsay
-        self.assertEqual(claim("better", better, evidential="ja'o")["claim_status"], "DERIVED")
 
     def test_classes_and_shapes_in_table_v0(self):
         got = {w: (e.get("class"), e.get("shape")) for w, e in WORDS.items()}

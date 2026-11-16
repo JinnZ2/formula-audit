@@ -594,8 +594,11 @@ evidential    how the claimant knows, mapped to the claim's own status and carri
               se'o -> OBSERVED, scope "speaker's own state only": x1 is filled with the
                       speaker and the other places are waived. se'o on anything
                       external -> DEGRADED.
-              ka'u -> CARRIED when all four oral-record checks are met; any "n", or no
-                      oral_record -> PROPOSED
+              ka'u -> the oral-record discriminator row: four checks fixed by name,
+                      shared, multi_gen, checkable, not_central, each y / n.
+                      all y -> OBSERVED, with provenance {transmission: oral,
+                      multi_generation: true, relay: holder}; any n -> PROPOSED;
+                      a check not answered, or another name -> DEGRADED, naming it
               none given -> null. A PASS never upgrades it.
 status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
               table_entry_status is the place-table entry's, PROPOSED until the
@@ -622,10 +625,11 @@ table           the shipped places.json is an example written here, all PROPOSED
                 holder null; no holder has confirmed any entry
 Lojban          the shapes (glare, snura, jibni, zmadu, xamgu) and the meanings of
                 se'o, ja'o and ka'u are recalled, not checked against a Lojban source:
-                the reference pages could not be reached from the build. CARRIED.
-oral record     the checker asks for exactly four named checks, each y / n. WHICH four
-                checks make the discriminator row was not given to this build: the
-                names are whatever the claim supplies. That slot is unnamed here.
+                the reference pages could not be reached from the build.
+oral record     the four checks are answered y / n by the claimant. Nothing here tests
+                whether an account really is shared, multi-generational, checkable
+                or not central; the row is taken as given. What each check means in
+                full is the holder's, and is not written out in this repository.
 self-report     "the speaker" is matched by text: x1 empty, or "I" / "me" / "myself",
                 or the speaker's name. Nothing checks that a se'o claim really is
                 about an inner state.
