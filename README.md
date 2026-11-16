@@ -4,8 +4,9 @@ Status: branch 1 (unit audit) is implemented and passes its own tests within
 tested scope. Its slots (limit, sign, magnitude range) are recorded, NOT
 checked. Its scanner is a placeholder. Branch 2a (proof kernel) is implemented
 and passes its own tests within tested scope; it reads Metamath databases
-only. The rest of branch 2, and branch 3, are not built and are not specified
-in this repository yet. Three known blind spots of branch 1 are listed below
+only. Branch 2b (data points and intersections) is implemented and passes its
+own tests within tested scope; only its interval tier is rigorous. Branch 3 is
+not built and is not specified in this repository yet. Three known blind spots of branch 1 are listed below
 and are not built.
 
 License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
@@ -15,7 +16,8 @@ License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
 ```text
 branch 1   unit audit      unitaudit/   BUILT: dimension check, PASS / FAIL / VOID
 branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof verifier
-branch 2   (rest) VOID     not named or specified here
+branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers, point
+                                         checks, intersections over a box
 branch 3   VOID            not named or specified here
 ```
 
@@ -131,6 +133,60 @@ phone           no phone timing was taken; see the run notes in the commit that
                 added this section for timings on the build machine
 ```
 
+## Branch 2b: data points and intersections
+
+```text
+checks.json --> branch 1 on the formula ---- not PASS ----> VOID (with branch 1's reason)
+                      | PASS
+                      v
+      float  --too close-->  Decimal(prec)  --too close-->  Fraction intervals
+      (fast, not rigorous)   (not rigorous)                 (rigorous; sqrt exp ln sin cos
+            |                      |                         as outward enclosures)
+            +-------- decided -----+----------- decided ----------+
+                                   v
+        HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside
+        UNDECIDED  straddles the edge at the last tier
+        VOID  no value on these inputs (division by an interval containing 0, ...)
+```
+
+```sh
+python3 -m numcheck check checks.json [--json]
+# exit 0 all HOLDS / BOTH_HOLD | 1 any FAILS / ONE_FAILS | 3 VOID or UNDECIDED, none failed | 2 usage
+```
+
+```text
+values        a number or an interval [lo, hi], with a unit and its own status tag
+              (OBSERVED / DERIVED / PROPOSED, or null: never filled in). Numbers
+              are read exactly as written: 0.1 is one tenth.
+tolerance     t >= 0, a plain number in the units of the formula's two sides
+tiers         a tier is climbed only when it cannot call the result. Interval-valued
+              inputs go straight to the interval tier. The record names the tier
+              that decided, its precision, and rigorous: true / false.
+status        HOLDS / FAILS / UNDECIDED are DERIVED; VOID has none
+intersection  two formulas and a box. BOTH_HOLD: both hold on every subbox reached.
+              ONE_FAILS: one fails at every point of a located subbox.
+              UNDECIDED: neither at the depth limit. Bisection along the widest side.
+slots         as branch 1: VOID (absent) or UNCHECKED (given, not checked)
+```
+
+Limits of branch 2b
+
+```text
+rigorous      only the interval tier. A float- or Decimal-tier verdict rests on a
+              margin rule (1e-9, or 10^-(prec/2), times the largest magnitude met),
+              not on an enclosure; rigorous: false says so on the record.
+tolerance 0   on interval inputs an equality can hold exactly and still read
+              UNDECIDED: x*x and x**2 have different enclosures (the dependency
+              problem). Enclosures are safe, not tight.
+ONE_FAILS     needs a whole subbox where a formula fails; a failure at single points
+              only reads UNDECIDED
+units         branch 1's blind spots carry over: no scale factors, so values are
+              taken to be in the stated units as written (km against m is not seen)
+powers        integer exponents and 1/2 only; exponent must be a literal number
+sin, cos      arguments within +-1000
+not built     relative tolerance, inequalities (< <=), more than two formulas
+```
+
 ## Limits (branch 1)
 
 ```text
@@ -139,7 +195,8 @@ unit table            SI base, N J W Pa Hz V C ohm T Wb, dimensionless; anything
 scanner               placeholder: one-'=' lines and `backtick` spans that parse; misses
                       prose and LaTeX formulas, picks up ordinary assignments
 formulas.json         example input; its units were typed in, not read from a source
-stdlib used           ast, fractions, json, plus sys and pathlib (CLI, scanner), unittest
+stdlib used           ast, fractions, json, plus sys and pathlib (CLI, scanner), unittest;
+                      branch 2a: time; branch 2b: decimal, math (isqrt, floor, float tier)
 python                3.10 (floor) and 3.13 run by .github/workflows/ci.yml; see its runs
 ```
 
