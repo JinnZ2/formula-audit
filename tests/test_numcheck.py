@@ -211,6 +211,15 @@ class TestPoint(unittest.TestCase):
         self.assertEqual((r["verdict"], r["tiers"][0]["outcome"]),
                          ("HOLDS", "too close to call"))
 
+    def test_number_only_expression_is_exact_at_every_tier(self):
+        # README "Limits of branch 2b", constants: a number-only expression is
+        # folded to an exact Fraction before any tier runs, so the float tier
+        # never performs the cancellation and makes no prediction.
+        r = point("y = (1e16 + 1) - 1e16", "0", y=val(1, "1"))
+        self.assertEqual((r["verdict"], r["deciding_tier"], r["rigorous"]),
+                         ("HOLDS", "interval", True))
+        self.assertEqual([t["predicted_verdict"] for t in r["tiers"][:2]], [None, None])
+
     def test_straddle_goes_to_bisection(self):
         kw = dict(x=val(["9.8", "10.4"], "m"), v=val(2, "m/s"))
         r = point("x = v*t", "0.5", t=val(["4.9", "5.1"], "s"), **kw)
