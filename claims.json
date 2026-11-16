@@ -1,0 +1,13 @@
+{"note": "example input for wordslots. Claims typed in for the example.",
+ "claims": [
+  {"word": "safe", "slots": {"x1": "the bridge"}, "evidential": "opinion", "source": "example"},
+  {"word": "safe", "slots": {"x1": "the bridge", "x2": "collapse under a 3 t load", "x3": "pedestrians"},
+   "evidential": "hearsay", "source": "a neighbour"},
+  {"word": "warm", "slots": {"x1": "the room", "x2": {"text": "room standard", "value": "295", "unit": "K", "is": "room"}},
+   "evidential": "observed", "source": "thermometer reading"},
+  {"word": "warm", "slots": {"x1": "the room", "x2": {"text": "room standard", "value": "305", "unit": "K", "is": "room"}},
+   "evidential": "observed", "source": "thermometer reading"},
+  {"word": "warm", "slots": {"x1": "the room", "x2": "room standard"}, "evidential": "concluded"},
+  {"word": "cosy", "slots": {"x1": "the room"}},
+  {"word": "safe", "slots": {"x1": "a", "x2": "b", "x3": "c"}, "certainty": "high"}
+ ]}

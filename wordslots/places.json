@@ -1,0 +1,21 @@
+{"note": "place table: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag.",
+ "holder": null,
+ "words": {
+  "warm": {"status": "PROPOSED", "slots": [
+    {"name": "x1", "role": "what is warm", "required": true, "status": "PROPOSED"},
+    {"name": "x2", "role": "by standard", "required": true, "status": "PROPOSED",
+     "ranges": {"room": {"lo": "291", "hi": "299", "unit": "K"},
+                "body": {"lo": "309", "hi": "311", "unit": "K"}}}
+  ]},
+  "safe": {"status": "PROPOSED", "slots": [
+    {"name": "x1", "role": "what is safe", "required": true, "status": "PROPOSED"},
+    {"name": "x2", "role": "from threat", "required": true, "status": "PROPOSED"},
+    {"name": "x3", "role": "for whom", "required": true, "status": "PROPOSED"}
+  ]},
+  "near": {"status": "PROPOSED", "slots": [
+    {"name": "x1", "role": "what is near", "required": true, "status": "PROPOSED"},
+    {"name": "x2", "role": "to what", "required": true, "status": "PROPOSED"},
+    {"name": "x3", "role": "at distance", "required": false, "status": "PROPOSED",
+     "bounds": {"lo": "0", "hi": "100", "unit": "m"}}
+  ]}
+ }}

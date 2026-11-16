@@ -5,8 +5,10 @@ tested scope. Its slots (limit, sign, magnitude range) are recorded, NOT
 checked. Its scanner is a placeholder. Branch 2a (proof kernel) is implemented
 and passes its own tests within tested scope; it reads Metamath databases
 only. Branch 2b (data points and intersections) is implemented and passes its
-own tests within tested scope; only its interval tier is rigorous. Branch 3 is
-not built and is not specified in this repository yet. Three known blind spots of branch 1 are listed below
+own tests within tested scope; only its interval tier is rigorous. Branch 4
+(word slots) is implemented and passes its own tests within tested scope; its
+shipped place table is an example, every entry PROPOSED. Branch 3 is not built
+and is not specified in this repository yet. Three known blind spots of branch 1 are listed below
 and are not built.
 
 License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
@@ -19,6 +21,8 @@ branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof ver
 branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers, point
                                          checks, intersections over a box
 branch 3   VOID            not named or specified here
+branch 4   word slots      wordslots/   BUILT: place table, claim records, slot check;
+                                        numeric slot bounds handed to branch 2b
 ```
 
 A void branch stays void. It is not filled in to make the list look complete.
@@ -230,6 +234,59 @@ units         branch 1's blind spots carry over: no scale factors, so values are
 powers        integer exponents and 1/2 only; exponent must be a literal number
 sin, cos      arguments within +-1000
 not built     relative tolerance, inequalities (< <=), more than two formulas
+```
+
+## Branch 4: word slots
+
+A word claims nothing until its places are filled: "safe" is safe from what,
+for whom.
+
+```text
+places.json   word -> ordered slots (name, role, required, status tag, optional bounds)
+              warm: x1 what is warm, x2 by standard
+              safe: x1 what is safe, x2 from threat, x3 for whom
+claims.json   fixed record: word, slots, evidential, source, source_path, table
+                      |
+        undeclared field / slot ---> VOID          unknown word ---> VOID
+        a required slot empty   ---> VOID, each empty slot named
+                      |
+        a filled slot with numeric bounds and a value ---> branch 2b (units first)
+                      |
+   PASS  slots filled, bounds hold     FAIL  a value outside its bounds (slot located)
+   UNDECIDED  a value straddles its bounds     VOID  as above; never PASS
+```
+
+```sh
+python3 -m wordslots check claims.json [--table places.json] [--json]
+# exit 0 all PASS | 1 any FAIL | 3 VOID or UNDECIDED, no FAIL | 2 usage
+```
+
+```text
+evidential    how the claimant knows, mapped to the claim's own status and carried:
+              observed -> OBSERVED   concluded -> DERIVED   hearsay, opinion -> PROPOSED
+              defined -> OBSERVED (given input, like an axiom in branch 2a)
+              none given -> null. A PASS never upgrades it.
+status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
+              table_entry_status is the place-table entry's, PROPOSED until the
+              holder of the word confirms it; the checker never changes a tag.
+ranges        "bounds" {lo, hi, unit} on a slot, and named "ranges" (a name standing
+              for a range of values, as a COBOL 88 level does); a filling's "is"
+              names the range it claims. No numeric value given -> UNCHECKED.
+void slots    kept on the record with slot_state VOID, never dropped
+```
+
+Limits of branch 4
+
+```text
+PASS            the claim is well-formed: its required places are filled and any
+                checked bound holds. It does not say the claim is true.
+table           the shipped places.json is an example written here, all PROPOSED;
+                no holder has confirmed any entry
+fillings        text is not read: "x2: nothing" counts as filled
+UNCHECKED       a bound with no numeric value is not checked and the claim can still
+                PASS; the record says UNCHECKED
+defined         its map to OBSERVED is a choice made here, not given in the order
+not built       claims with more than one word, nesting, negation
 ```
 
 ## Limits (branch 1)
