@@ -47,10 +47,13 @@ class World:
         for name, rep in (("b1.json", b1), ("b2.json", b2), ("b4.json", b4)):
             (self.dir / name).write_text(json.dumps(rep))
 
-    def ref(self, branch, record, at):
+    def ref(self, branch, record, at, rate=None):
         rec = self.reports[branch]["records"][record]
-        return {"branch": branch, "file": {"1": "b1.json", "2b": "b2.json", "4": "b4.json"}[
+        out = {"branch": branch, "file": {"1": "b1.json", "2b": "b2.json", "4": "b4.json"}[
             branch], "record": record, "sha256": record_sha(rec), "at": at}
+        if rate is not None:
+            out["rate"] = rate
+        return out
 
     def case(self, mode="EXPLORE", refs=None, **kw):
         c = {"purpose": {"mode": mode, "target": "find where x = v*t stops holding"},
@@ -58,7 +61,8 @@ class World:
                                      self.ref("2b", 0, 3), self.ref("4", 0, 4)],
              "energy_budget": {"available": "10", "reserve": "4"},
              "time_budget": {"available": "8", "reserve": "2"},
-             "needed_function_met": "y", "now": "6", "drift_rate": "1/2"}
+             "needed_function_met": "y", "now": "6", "default_drift_rate": "1/8",
+             "units": {"energy": "J", "cost": "J", "time": "s", "drift_rate": "W"}}
         c.update(kw)
         return c
 
@@ -191,30 +195,138 @@ class TestEnvironment(Base):
 class TestOptions(Base):
     def test_drift_void_means_no_ranking(self):
         c = self.w.case("SOLVE")
-        del c["drift_rate"]
+        del c["default_drift_rate"]                           # and no reference carries a rate
         r = self.w.run(c)
         self.assertEqual((r["verdict"], r["steps_done"]), ("VOID", 0))
-        self.assertIn("drift_rate is VOID", r["void_reason"])
-        self.assertIn("never taken as zero", r["void_reason"])
+        self.assertIn("environment reference 0", r["void_reason"])      # the one it names
+        self.assertIn("has no drift rate", r["void_reason"])
+        self.assertIn("nothing is ranked", r["void_reason"])
         self.assertIsNone(r["log"][1]["rivals"])               # nothing was ranked
         self.assertIsNone(r["log"][1]["chosen"])
         self.assertIsNone(self.w.proposals())
-        # a drift that comes to 0 is not taken as zero either
-        r = self.w.run(self.w.case("SOLVE", now="4"))          # newest record is at 4
-        self.assertEqual(r["verdict"], "VOID")
-        self.assertIn("not taken as zero", r["void_reason"])
-        r = self.w.run(self.w.case("SOLVE", drift_rate="0"))
-        self.assertEqual(r["verdict"], "VOID")
+        # every reference but one has a rate: still VOID, naming that one
+        refs = [self.w.ref("1", 0, 1, "1/4"), self.w.ref("2b", 0, 3), self.w.ref("4", 0, 4, "1")]
+        c = self.w.case("SOLVE", refs=refs)
+        del c["default_drift_rate"]
+        self.assertIn("environment reference 1 (b2.json", self.w.run(c)["void_reason"])
+
+    def test_two_references_at_different_rates_sum(self):
+        # ages 5 and 2 at now = 6: 1/4 x 5 + 3 x 2 = 29/4
+        refs = [self.w.ref("2b", 0, 1, "1/4"), self.w.ref("4", 0, 4, "3")]
+        c = self.w.case("SOLVE", refs=refs)
+        del c["default_drift_rate"]
+        e = self.w.run(c)["log"][1]
+        ina = e["options"][-1]
+        self.assertEqual((ina["name"], ina["cost"], ina["cost_status"]),
+                         ("inaction", "29/4", "DERIVED"))
+        self.assertEqual(ina["cost_parts"], [
+            {"reference": 0, "rate": "1/4", "age": "5", "cost": "5/4",
+             "rate_from": "the reference"},
+            {"reference": 1, "rate": "3", "age": "2", "cost": "6",
+             "rate_from": "the reference"}])
+        self.assertEqual(ina["default_rate_used_for"], [])
+        # a default fills the gaps, and its use is flagged
+        refs = [self.w.ref("2b", 0, 1, "1/4"), self.w.ref("4", 0, 4)]
+        e = self.w.run(self.w.case("SOLVE", refs=refs, default_drift_rate="2"))["log"][1]
+        self.assertEqual(e["options"][-1]["cost"], "21/4")              # 5/4 + 2 x 2
+        self.assertEqual(e["options"][-1]["default_rate_used_for"], [1])
+        self.assertEqual(e["options"][-1]["cost_parts"][1]["rate_from"], "default")
+
+    def test_just_updated_costs_zero_and_ranks(self):
+        # every reference is dated now: nothing has drifted yet. Cost 0, DERIVED, and
+        # inaction ranks first even against a tool with strong evidence
+        refs = [self.w.ref("2b", 0, 6, "1/2"), self.w.ref("4", 0, 6, "3")]
+        ev = [{"id": "e", "type": "direct", "hypothesis": "boundary_probe", "lr": "1000",
+               "provenance": "p", "shared_ancestry": [], "status": "OBSERVED"}]
+        r = self.w.run(self.w.case("SOLVE", refs=refs, evidence=ev))
+        e = r["log"][1]
+        self.assertEqual(r["verdict"], "STEPPED")
+        ina = e["options"][-1]
+        self.assertEqual((ina["cost"], ina["cost_status"]), ("0", "DERIVED"))
+        self.assertEqual(e["chosen"], "inaction")
+        self.assertIn("costs nothing", e["choice_reason"])
+        self.assertEqual(e["rivals"][0]["name"], "inaction")
+        self.assertEqual(e["rivals"][0]["score"], "unbounded (cost 0)")
+        self.assertEqual(len(e["rivals"]), 3)                   # the others are still recorded
+        # one step later the world has aged: the cost is no longer 0 and the tool wins
+        r = self.w.run(self.w.case("SOLVE", refs=refs, evidence=ev), steps=2)
+        self.assertEqual([x["chosen"] for x in r["log"][1:]], ["inaction", "boundary_probe"])
+        self.assertEqual(r["log"][2]["options"][-1]["cost"], "7/2")
+
+    def test_rate_zero_is_void(self):
+        for refs, default in (([self.w.ref("2b", 0, 3, "0")], "1/8"),
+                              ([self.w.ref("2b", 0, 3)], "0"),
+                              ([self.w.ref("2b", 0, 3, "1"), self.w.ref("4", 0, 4, 0)], None)):
+            c = self.w.case("SOLVE", refs=refs)
+            if default is None:
+                del c["default_drift_rate"]
+            else:
+                c["default_drift_rate"] = default
+            r = self.w.run(c)
+            self.assertEqual(r["verdict"], "VOID")
+            self.assertIn("static world claimed, unevidenced", r["void_reason"])
+            self.assertIsNone(r["log"][1]["chosen"])
+        r = self.w.run(self.w.case(refs=[self.w.ref("2b", 0, 3, "-1")]))
+        self.assertIn("below 0", r["void_reason"])
+        r = self.w.run(self.w.case(refs=[self.w.ref("2b", 0, 9, "1")]))   # dated after now
+        self.assertIn("dated after now", r["void_reason"])
 
     def test_inaction_is_always_an_option_and_its_cost_grows(self):
         r = self.w.run(self.w.case(), steps=4)
         costs = [next(o for o in e["options"] if o["name"] == "inaction")["cost"]
                  for e in r["log"][1:]]
-        self.assertEqual(costs, ["1", "3/2", "2", "5/2"])      # 1/2 x (now - 4), now 6, 7, 8, 9
+        # 1/8 x (ages 5 + 4 + 3 + 2) = 7/4 at now 6; each step ages four references by 1
+        self.assertEqual(costs, ["7/4", "9/4", "11/4", "13/4"])
         for e in r["log"][1:]:
             self.assertEqual(e["options"][-1]["name"], "inaction")
             self.assertTrue(e["options"][-1]["open"])
+            self.assertEqual(e["options"][-1]["default_rate_used_for"], [0, 1, 2, 3])
 
+
+class TestUnits(Base):
+    def test_unit_mismatch_is_void(self):
+        good = {"energy": "J", "cost": "J", "time": "s", "drift_rate": "W"}
+        for units, why in ((dict(good, drift_rate="J"), "cost = rate*dt"),     # J x s is not J
+                           (dict(good, cost="N"), "energy = cost"),
+                           (dict(good, time="m"), "cost = rate*dt"),
+                           (dict(good, drift_rate="furlong/s"), "units VOID")):
+            r = self.w.run(self.w.case("SOLVE", units=units))
+            self.assertEqual((r["verdict"], r["steps_done"]), ("VOID", 0), units)
+            self.assertIn(why, r["void_reason"])
+            self.assertIsNone(r["log"][1]["chosen"])
+        r = self.w.run(self.w.case("SOLVE", units=dict(good, drift_rate="J")))
+        self.assertIn("units FAIL", r["void_reason"])
+        self.assertIn("L^2 M T^-2 vs L^2 M T^-1", r["void_reason"])
+        self.assertIsNone(self.w.proposals())
+
+    def test_units_must_be_declared(self):
+        c = self.w.case()
+        del c["units"]
+        self.assertIn("units are VOID", self.w.run(c)["void_reason"])
+        c = self.w.case(units={"energy": "J", "cost": "J", "time": "s"})
+        self.assertIn("units are VOID for: drift_rate", self.w.run(c)["void_reason"])
+        c = self.w.case(units={"energy": "J", "cost": "J", "time": "s", "drift_rate": "W",
+                               "mass": "kg"})
+        self.assertEqual(self.w.run(c)["verdict"], "VOID")
+
+    def test_unit_checks_are_on_the_step(self):
+        e = self.w.run(self.w.case())["log"][1]
+        self.assertEqual([(u["formula"], u["verdict"]) for u in e["units"]],
+                         [("energy = cost", "PASS"), ("cost = rate*dt", "PASS")])
+        self.assertEqual(e["units"][1]["units"], {"cost": "J", "rate": "W", "dt": "s"})
+        # equivalent spellings pass: J/s for W
+        r = self.w.run(self.w.case(units={"energy": "kg*m**2/s**2", "cost": "J", "time": "s",
+                                          "drift_rate": "J/s"}))
+        self.assertEqual(r["verdict"], "STEPPED")
+        # a reference may carry its own rate unit; it is checked too
+        refs = [dict(self.w.ref("2b", 0, 3, "1"), rate_unit="W"),
+                dict(self.w.ref("4", 0, 4, "1"), rate_unit="N")]
+        r = self.w.run(self.w.case(refs=refs))
+        self.assertEqual(r["verdict"], "VOID")
+        self.assertIn("environment reference 1", r["void_reason"])
+
+
+class TestOptionsMore(Base):
     def test_closed_options_say_why(self):
         e = self.w.run(self.w.case(energy_budget={"available": "6", "reserve": "1"},
                                    tools=[dict(TABLE_V0[1], cost="50")] + TABLE_V0[:1]))["log"][1]
@@ -240,7 +352,7 @@ class TestSolve(Base):
         rivals = {x["name"]: x for x in e["rivals"]}           # both rivals are on the record
         self.assertEqual(sorted(rivals), ["boundary_probe", "inaction"])
         self.assertEqual((rivals["inaction"]["posterior"], rivals["inaction"]["cost"],
-                          rivals["inaction"]["score"]), ("1/2", "1", "1/2"))
+                          rivals["inaction"]["score"]), ("1/2", "7/4", "2/7"))
         self.assertEqual((rivals["boundary_probe"]["cost"], rivals["boundary_probe"]["score"]),
                          ("50", "1/100"))
         self.assertIsNone(e["candidate"])
@@ -258,6 +370,10 @@ class TestSolve(Base):
         self.assertEqual(rivals["boundary_probe"]["posterior"], "5/7")
         self.assertEqual(rivals["boundary_probe"]["score"], "5/21")
         self.assertEqual(e["infer"]["evidence_used"], 1)
+        self.assertEqual(rivals["inaction"]["score"], "4/49")           # (1/7) / (7/4)
+        saved = self.w.dir / e["infer_log"]["file"]                     # the ranking's own log
+        self.assertTrue(saved.exists())
+        self.assertEqual(len(e["infer_log"]["sha256"]), 64)
         data = self.w.proposals()
         self.assertEqual(len(data["proposals"]), 1)
         p = data["proposals"][0]
@@ -351,7 +467,8 @@ class TestLog(Base):
     def test_replay_reproduces(self):
         r = self.w.run(self.w.case(), steps=4)
         self.assertTrue(r["replay_matches"])
-        again = replay(json.loads(json.dumps(r["log"])))
+        again = replay(json.loads(json.dumps(r["log"])), self.w.dir)
+        self.assertEqual(again["verdict"], "REPRODUCED")
         self.assertEqual(again["state"], r["final_state"])
         made = [x["glyph"]["key"] for part in ("proposals", "questions")
                 for x in self.w.proposals()[part]]
@@ -360,12 +477,57 @@ class TestLog(Base):
                                           "time_available": "4", "time_reserve": "2",
                                           "now": "10"})
         # a log that stops early gives the state at that point
-        self.assertEqual(replay(r["log"][:2])["state"], r["log"][1]["state_after"])
+        self.assertEqual(replay(r["log"][:2], self.w.dir)["state"], r["log"][1]["state_after"])
+
+    def solve(self, steps=2):
+        ev = [{"id": "e", "type": "direct", "hypothesis": "boundary_probe", "lr": "5",
+               "provenance": "p", "shared_ancestry": [], "status": "OBSERVED"}]
+        return self.w.run(self.w.case("SOLVE", evidence=ev), steps=steps)
+
+    def test_replay_runs_branch_5_again_from_the_saved_log(self):
+        r = self.solve()
+        again = replay(r["log"], self.w.dir)
+        self.assertEqual((again["verdict"], again["infer_logs_rerun"], again["failures"]),
+                         ("REPRODUCED", 2, []))
+        saved = json.loads((self.w.dir / r["log"][1]["infer_log"]["file"]).read_text())
+        self.assertEqual(sorted(saved), ["input", "log", "posteriors"])
+        self.assertEqual(saved["posteriors"]["boundary_probe"], "5/7")
+        self.assertEqual(saved["input"]["evidence"][0]["lr"], "5")
+
+    def test_replay_with_a_tampered_infer_log_fails(self):
+        r = self.solve()
+        path = self.w.dir / r["log"][1]["infer_log"]["file"]
+        original = path.read_text()
+        # the evidence in the saved log is changed: the file no longer matches its sha256
+        path.write_text(original.replace('"lr": "5"', '"lr": "1/5"'))
+        again = replay(r["log"], self.w.dir)
+        self.assertEqual(again["verdict"], "FAILS")
+        self.assertEqual(again["failures"][0]["step"], 1)
+        self.assertIn("sha256 differs", again["failures"][0]["reason"])
+        # the file is changed AND the step log's sha256 is changed to match: branch 5 run
+        # again gives another ranking than the step log holds
+        import hashlib
+        log = json.loads(json.dumps(r["log"]))
+        log[1]["infer_log"]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        again = replay(log, self.w.dir)
+        self.assertEqual(again["verdict"], "FAILS")
+        self.assertIn("different ranking", again["failures"][0]["reason"])
+        # the step log itself is changed: a rival's posterior is edited
+        path.write_text(original)
+        log = json.loads(json.dumps(r["log"]))
+        log[1]["rivals"][0]["posterior"] = "6/7"
+        self.assertEqual(replay(log, self.w.dir)["verdict"], "FAILS")
+        # the file is gone
+        path.unlink()
+        again = replay(r["log"], self.w.dir)
+        self.assertEqual(again["verdict"], "FAILS")
+        self.assertIn("cannot read", again["failures"][0]["reason"])
 
     def test_dry_run_writes_nothing(self):
         r = self.w.run(self.w.case(), write=False)
         self.assertEqual(r["verdict"], "STEPPED")
         self.assertIsNone(self.w.proposals())
+        self.assertFalse((self.w.dir / "glyph_log").exists())
 
     def test_existing_proposals_are_kept(self):
         old = {"proposals": [{"lhs": "x*x", "rhs": "x**2", "domain": {}, "status": "PROPOSED"}]}

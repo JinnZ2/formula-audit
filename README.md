@@ -463,19 +463,25 @@ translation. The tribe is not named. Co-authored (human + AI).
 
 ```text
 case.json   purpose {mode: SOLVE | EXPLORE, target}; environment: references
-            {branch, file, record, sha256, at} to records of branches 1 / 2a / 2b / 4 / 5;
-            energy_budget and time_budget {available, reserve}; needed_function_met
-            y / n / VOID; now; drift_rate
+            {branch, file, record, sha256, at, rate} to records of branches 1 / 2a / 2b /
+            4 / 5; energy_budget and time_budget {available, reserve};
+            needed_function_met y / n / VOID; now; units {energy, cost, time,
+            drift_rate}; default_drift_rate (optional)
                  |
    input     no purpose -> VOID (never defaulted). Every reference is RE-READ: file
              opened, record found, sha256 compared; one that does not check -> VOID.
    gate      EXPLORE only if needed_function_met = y AND energy available > reserve
              AND time available > reserve. Any n -> SOLVE. Anything VOID -> VOID,
              naming which. Asked again at every step.
+   units     branch 1 is run on  cost = drift_rate x time  and  energy = cost  with the
+             declared units; FAIL or VOID there -> the step is VOID
    options   tools whose needed features are in the environment, affordable, and not
              yet used on that instance; and inaction, always.
-             cost(inaction) = drift_rate x time since the newest environment record.
-             No drift_rate, or a cost that comes to 0 -> VOID: nothing is ranked.
+             cost(inaction) = sum over the references of rate_i x (now - at_i), DERIVED
+               a reference with no rate and no default_drift_rate -> VOID, naming it
+               the default's use is flagged on the step
+               every age 0, rates > 0 -> cost 0: just read; inaction is free, ranks first
+               a rate of 0 declared -> VOID ("static world claimed, unevidenced")
    SOLVE     each open option is a rival "this option moves toward the target";
              ranked by branch 5 posterior x 1 / cost. All rivals recorded.
    EXPLORE   the first tool, in table order, with a feature present and unpaired;
@@ -483,9 +489,12 @@ case.json   purpose {mode: SOLVE | EXPLORE, target}; environment: references
    one step  the tool turns one feature instance into one candidate, written to
              proposals.json (status PROPOSED, tagged SOLVE or EXPLORE); the
              environment is read again; the next step starts from the new state.
-   log       every step: gate, options with why each is open or closed, rivals,
-             choice, candidate, state before and after. replay(log) reproduces the
-             final state and the candidates.
+   log       every step: gate, unit checks, options with why each is open or closed,
+             rivals, choice, candidate, state before and after. Each SOLVE ranking's
+             branch 5 input and log are saved under glyph_log/ and named in the step
+             log with their sha256. replay(log) reproduces the final state and the
+             candidates and runs branch 5 again from each saved file: a changed file,
+             a changed step log or a different ranking -> replay FAILS.
 ```
 
 ```sh
@@ -524,7 +533,10 @@ physics        the environment's "physics" is only the two budgets and the drift
 tool effects   a tool's cost and time are numbers in the table; nothing measures them
 SOLVE          "moves toward the target" is what the case's evidence claims; the target
                text itself is recorded and not interpreted
-drift          one rate for the whole environment; the rate is an input, not measured
+drift          a rate per reference, in declared units that branch 1 checks; the rates
+               themselves are inputs. Nothing measures how fast a record goes stale.
+ranking        computed inline by branch 5 at each step, then saved and re-runnable;
+               it is not read from an earlier branch 5 record
 tools          four, chosen to touch branches 1, 2b and 4; branch 2a and branch 5
                records can be referenced but no v0 tool reads a feature from them
 ```

@@ -1,7 +1,8 @@
 """environment -- what the operator reads. Co-authored.
 
 The environment is a list of references to records written by the other
-branches: {branch, file, record, sha256, at}. Each one is RE-READ: the file
+branches: {branch, file, record, sha256, at, rate?, rate_unit?}. "at" is when
+the record was made; "rate" is how fast that record drifts out of date. Each one is RE-READ: the file
 is opened, the record found, its sha256 compared. A reference that does not
 check makes the environment VOID; nothing is taken on trust.
 
@@ -53,7 +54,8 @@ def read_ref(ref, base_dir):
     """One reference -> its record. Raises Void with the reason."""
     if not isinstance(ref, dict):
         raise Void("a reference is not a record")
-    extra = [k for k in ref if k not in ("branch", "file", "record", "sha256", "at")]
+    extra = [k for k in ref if k not in ("branch", "file", "record", "sha256", "at", "rate",
+                                         "rate_unit")]
     if extra:
         raise Void(f"undeclared field {extra[0]!r}")
     if ref.get("branch") not in BRANCHES:
@@ -115,9 +117,17 @@ def read_environment(refs, base_dir):
             at = Fraction(at)
         except (ValueError, ZeroDivisionError):
             raise Void(f"environment reference {i}: cannot read 'at'")
+        rate = ref.get("rate")
+        if rate is not None:
+            if isinstance(rate, (bool, float)):
+                raise Void(f"environment reference {i}: rate is not an exact number")
+            try:
+                rate = Fraction(rate)
+            except (ValueError, ZeroDivisionError, TypeError):
+                raise Void(f"environment reference {i}: cannot read 'rate'")
         rows.append({"index": i, "branch": ref["branch"], "file": ref["file"],
                      "record": ref["record"], "sha256": ref["sha256"].lower(), "at": at,
-                     "data": rec})
+                     "rate": rate, "rate_unit": ref.get("rate_unit"), "data": rec})
     feats = {f: [] for f in FEATURES}
     ones = [r for r in rows if r["branch"] == "1" and r["data"].get("verdict") == "PASS"]
     for i, a in enumerate(ones):

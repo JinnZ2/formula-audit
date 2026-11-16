@@ -59,6 +59,9 @@ def main(argv):
                 print(f"step {e['step']}: VOID {e['void_reason']}")
                 continue
             print(f"step {e['step']}: {e['mode']} ({e['gate']['gate']})")
+            used = e["options"][-1].get("default_rate_used_for")
+            if used:
+                print(f"   FLAG   default drift rate used for environment references {used}")
             for o in e["options"]:
                 print(f"   option {o['name']:20s} cost {o['cost']:>6s} "
                       + ("open" if o["open"] else f"closed: {o['why_not']}"))
@@ -76,7 +79,9 @@ def main(argv):
         if rep["verdict"] == "VOID" and not rep["log"]:
             print(f"VOID {rep['void_reason']}")
         print(f"{rep['verdict']}: {rep.get('steps_done', 0)} of {rep['steps_asked']} steps; "
-              f"ceiling: {rep['ceiling']}; replay matches: {rep.get('replay_matches')}")
+              f"ceiling: {rep['ceiling']}; replay: "
+              f"{(rep.get('replay') or {}).get('verdict')}"
+              f" ({(rep.get('replay') or {}).get('infer_logs_rerun')} branch 5 logs run again)")
     return 0 if rep["verdict"] == "STEPPED" else 3
 
 

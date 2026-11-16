@@ -3,17 +3,29 @@
 Definition: the README section "Glyph (branch 3 reasoning operator)".
 
   input     purpose (SOLVE + target | EXPLORE), environment (references to
-            records of branches 1 / 2a / 2b / 4 / 5, re-read), energy_budget,
-            time_budget ({available, reserve}), needed_function_met (y / n /
-            VOID), now, drift_rate. No purpose -> VOID; it is never defaulted.
+            records of branches 1 / 2a / 2b / 4 / 5, re-read, each with its
+            time "at" and its drift "rate"), energy_budget, time_budget
+            ({available, reserve}), needed_function_met (y / n / VOID), now,
+            units, default_drift_rate (optional). No purpose -> VOID; it is
+            never defaulted.
   gate      EXPLORE only if needed_function_met = y AND energy surplus AND
             time surplus (available above reserve). Any "n" -> SOLVE. Anything
             VOID -> VOID, naming which.
+  units     the case declares units for energy, cost, time and drift_rate.
+            Branch 1 (unitaudit) is run on cost = drift_rate x time and on
+            energy = cost; a FAIL or VOID there makes the step VOID.
   options   every tool of the tool table whose needed features are present in
             the environment and whose cost the energy available covers; and
-            inaction, always. cost(inaction) = drift_rate x time since the
-            newest environment record. No drift_rate, or a cost that comes to
-            0 -> VOID: no ranking. It is never taken as zero.
+            inaction, always.
+            cost(inaction) = sum over the environment references of
+                             rate_i x age_i,   age_i = now - at_i
+            rate_i is on the reference, or the case's default_drift_rate (its
+            use is flagged on the step). A reference with no rate and no
+            default -> VOID, naming it. The cost is DERIVED from those inputs.
+              every age 0, rates above 0 -> cost 0: the world was just read;
+                                            inaction is free and ranks first
+              a rate of 0 declared       -> VOID: a static world is claimed
+                                            and nothing here evidences it
   SOLVE     each option is a rival "this option moves toward the target";
             the rivals are ranked by branch 5 (infer) posterior x 1 / cost.
             All rivals are recorded, not only the winner.
@@ -23,7 +35,9 @@ Definition: the README section "Glyph (branch 3 reasoning operator)".
   one step  the chosen tool turns one feature instance into one candidate,
             written to proposals.json (the 2b seam); the environment is read
             again; the next step is chosen from the new state. Every step is
-            logged; replay(log) reproduces the state.
+            logged. The branch 5 input and log of each ranking are saved to a
+            file named in the step log with its sha256; replay re-runs branch
+            5 from that file and FAILS if the file or the result differs.
   ceiling   nothing the glyph writes is above PROPOSED. Only checks by 2a /
             2b move anything further, and they are not run here.
 """
@@ -34,15 +48,18 @@ from fractions import Fraction
 from pathlib import Path
 
 from infer.ladder import Void, rank as infer_rank
+from unitaudit.check import check_formula as unit_check
 
 from .environment import FEATURES, read_environment
 from .tools import TABLE_V0, _ref, apply_tool
 
-VERSION = "glyph branch3-0"
+VERSION = "glyph branch3-1"
 MODES = ("SOLVE", "EXPLORE")
 CASE_FIELDS = ("purpose", "environment", "energy_budget", "time_budget", "needed_function_met",
-               "now", "drift_rate", "inaction_time", "tools", "evidence", "priors",
-               "proposals", "note")
+               "now", "default_drift_rate", "units", "inaction_time", "tools", "evidence",
+               "priors", "proposals", "note")
+UNIT_FIELDS = ("energy", "cost", "time", "drift_rate")
+LOG_DIR = "glyph_log"
 
 
 def _frac(x, what):
@@ -127,20 +144,75 @@ def gate(purpose, case, state):
                                          "in surplus"}
 
 
+def check_units(case, env):
+    """Branch 1 on the quantities the step adds and compares. Raises Void."""
+    units = case.get("units")
+    if not isinstance(units, dict):
+        raise Void("units are VOID: the case must declare units for "
+                   + ", ".join(UNIT_FIELDS))
+    extra = [k for k in units if k not in UNIT_FIELDS]
+    if extra:
+        raise Void(f"units: undeclared field {extra[0]!r}")
+    missing = [k for k in UNIT_FIELDS if not isinstance(units.get(k), str)]
+    if missing:
+        raise Void("units are VOID for: " + ", ".join(missing))
+    checks = [("energy = cost", {"energy": units["energy"], "cost": units["cost"]}, "the case")]
+    rate_units = [(units["drift_rate"], "the case's drift_rate unit")] + [
+        (r["rate_unit"], f"environment reference {r['index']}")
+        for r in env["records"] if r["rate_unit"] is not None]
+    for u, where in rate_units:
+        checks.append(("cost = rate*dt", {"cost": units["cost"], "rate": u,
+                                          "dt": units["time"]}, where))
+    out = []
+    for formula, symbols, where in checks:
+        r = unit_check({"formula": formula, "symbols": symbols})
+        out.append({"formula": formula, "units": symbols, "of": where,
+                    "verdict": r["verdict"], "status": r["status"]})
+        if r["verdict"] != "PASS":
+            why = r["void_reason"] if r["verdict"] == "VOID" else (
+                r["located_error"]["rule"] + ": " + " vs ".join(r["located_error"]["dims"]))
+            raise Void(f"units {r['verdict']} for {formula} ({where}; "
+                       + ", ".join(f"{k} in {v}" for k, v in symbols.items()) + f"): {why}")
+    return out
+
+
+def inaction_cost(case, env, state):
+    """sum of rate_i x age_i. Returns (cost, parts, references on the default).
+    Raises Void: a reference with no rate and no default, a rate of 0, a
+    reference dated after now."""
+    default = case.get("default_drift_rate")
+    if default is not None:
+        default = _frac(default, "default_drift_rate")
+    parts, used_default, total = [], [], Fraction(0)
+    for r in env["records"]:
+        rate = r["rate"]
+        if rate is None:
+            if default is None:
+                raise Void(f"environment reference {r['index']} ({r['file']}, record "
+                           f"{r['record']!r}) has no drift rate and the case gives no "
+                           "default_drift_rate: inaction has no cost, so nothing is ranked")
+            rate = default
+            used_default.append(r["index"])
+        if rate == 0:
+            raise Void(f"environment reference {r['index']}: drift rate 0 "
+                       "(static world claimed, unevidenced)")
+        if rate < 0:
+            raise Void(f"environment reference {r['index']}: drift rate below 0")
+        age = state["now"] - r["at"]
+        if age < 0:
+            raise Void(f"environment reference {r['index']} is dated after now")
+        total += rate * age
+        parts.append({"reference": r["index"], "rate": str(rate), "age": str(age),
+                      "cost": str(rate * age), "rate_from": "default" if r["rate"] is None
+                      else "the reference"})
+    return total, parts, used_default
+
+
 def options(case, env, state, paired):
-    """Every option with why it is or is not open. Raises Void when inaction
-    has no cost: then nothing can be ranked."""
+    """Every option with why it is or is not open. Raises Void when inaction's
+    cost cannot be had: then nothing can be ranked."""
     table = case.get("tools") or TABLE_V0
-    rate = case.get("drift_rate")
-    if rate is None:
-        raise Void("drift_rate is VOID: inaction has no cost, so nothing is ranked "
-                   "(it is never taken as zero)")
-    rate = _frac(rate, "drift_rate")
-    since = state["now"] - env["newest"]
-    drift = rate * since
-    if drift <= 0:
-        raise Void(f"inaction cost comes to {drift} (rate {rate} x time since the newest "
-                   f"record {since}); it is not taken as zero: nothing is ranked")
+    drift, parts, used_default = inaction_cost(case, env, state)
     out = []
     for t in table:
         if not isinstance(t, dict) or not isinstance(t.get("name"), str) \
@@ -172,17 +244,24 @@ def options(case, env, state, paired):
     wait = _frac(case.get("inaction_time", 1), "inaction_time")
     out.append({"name": "inaction", "kind": "inaction", "cost": drift, "time": wait,
                 "needs": [], "instances": None, "unpaired": None, "open": True,
-                "why_not": None, "_insts": [],
-                "cost_is": f"drift: rate {rate} x time since the newest record {since}"})
+                "why_not": None, "_insts": [], "cost_status": "DERIVED",
+                "cost_is": "drift: sum of rate x age over the environment references",
+                "cost_parts": parts, "default_rate_used_for": used_default})
     return out
 
 
+def _score(post, cost):
+    """posterior x 1 / cost; a cost of 0 is free: None stands for unbounded."""
+    return None if cost == 0 else post / cost
+
+
 def choose_solve(case, opts):
+    """Returns (best option, rival table, reason, infer summary, infer input)."""
     rivals = [o for o in opts if o["open"]]
     if len(rivals) == 1:
         return rivals[0], [{"name": rivals[0]["name"], "posterior": None,
                             "cost": str(rivals[0]["cost"]), "score": None}], \
-            "the only open option", None
+            "the only open option", None, None
     names = {o["name"] for o in rivals}
     priors = case.get("priors") or {}
     hyps = [{"id": o["name"], "statement": f"{o['name']} moves toward the target",
@@ -194,21 +273,49 @@ def choose_solve(case, opts):
                 if not isinstance(e, dict) or e.get("hypothesis") in names
                 or (e.get("type") == "shadow"
                     and set(e.get("consistent_with") or []) <= names)]
-    rep = infer_rank({"hypotheses": hyps, "evidence": evidence})
+    infer_input = {"hypotheses": hyps, "evidence": evidence}
+    rep = infer_rank(infer_input)
     if rep["verdict"] != "RANKED":
         raise Void(f"branch 5 could not rank the options: {rep['void_reason']}")
-    post = {h["id"]: Fraction(h["posterior"]) for h in rep["hypotheses"]}
-    table = sorted(({"name": o["name"], "posterior": str(post[o["name"]]),
-                     "cost": str(o["cost"]), "score": str(post[o["name"]] / o["cost"]),
-                     "direction": next(h["direction"] for h in rep["hypotheses"]
-                                       if h["id"] == o["name"])} for o in rivals),
-                   key=lambda r: (-Fraction(r["score"]), r["name"]))
+    table = rival_table(rep, {o["name"]: o["cost"] for o in rivals})
     tie = len(table) > 1 and table[0]["score"] == table[1]["score"]
     best = next(o for o in rivals if o["name"] == table[0]["name"])
-    return best, table, "highest posterior x 1 / cost" + (
-        "; tied with " + table[1]["name"] + ", taken by name" if tie else ""), \
+    reason = ("costs nothing: the environment was just read" if best["cost"] == 0 else
+              "highest posterior x 1 / cost") + (
+        "; tied with " + table[1]["name"] + ", taken by name" if tie else "")
+    return best, table, reason, \
         {"evidence_used": len(evidence), "counts": rep["counts"],
-         "status": rep["status"], "prior": rep["log"][1]["op"]}
+         "status": rep["status"], "prior": rep["log"][1]["op"]}, \
+        {"input": infer_input, "log": rep["log"],
+         "posteriors": {h["id"]: h["posterior"] for h in rep["hypotheses"]}}
+
+
+def rival_table(rep, costs):
+    post = {h["id"]: Fraction(h["posterior"]) for h in rep["hypotheses"]}
+    rows = []
+    for name, cost in costs.items():
+        sc = _score(post[name], cost)
+        rows.append({"name": name, "posterior": str(post[name]), "cost": str(cost),
+                     "score": "unbounded (cost 0)" if sc is None else str(sc),
+                     "direction": next(h["direction"] for h in rep["hypotheses"]
+                                       if h["id"] == name), "_sort": sc})
+    rows.sort(key=lambda r: (0 if r["_sort"] is None else 1,
+                             -(r["_sort"] or 0), r["name"]))
+    for r in rows:
+        del r["_sort"]
+    return rows
+
+
+def save_infer(saved, base_dir):
+    """Write the branch 5 input and log of one ranking; content-addressed."""
+    text = json.dumps(saved, indent=1, sort_keys=True) + "\n"
+    sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    folder = Path(base_dir or ".") / LOG_DIR
+    folder.mkdir(exist_ok=True)
+    path = folder / f"infer_{sha[:16]}.json"
+    if not path.exists():
+        path.write_text(text, encoding="utf-8")
+    return {"file": f"{LOG_DIR}/{path.name}", "sha256": sha}
 
 
 def choose_explore(opts):
@@ -225,7 +332,8 @@ def step(case, state, base_dir, n, log, write=True):
     entry = {"step": n, "verdict": "VOID", "void_reason": None, "status": None,
              "purpose": case.get("purpose"), "mode": None, "gate": None,
              "environment": None, "options": None, "rivals": None, "chosen": None,
-             "choice_reason": None, "infer": None, "candidate": None,
+             "choice_reason": None, "infer": None, "infer_log": None, "units": None,
+             "candidate": None,
              "state_before": _show(state), "state_after": _show(state)}
     log.append(entry)
     try:
@@ -243,12 +351,15 @@ def step(case, state, base_dir, n, log, write=True):
             "newest": str(env["newest"]),
             "features": {f: len(v) for f, v in env["features"].items()},
             "candidates_already_made": len(paired)}
+        entry["units"] = check_units(case, env)
         opts = options(case, env, state, paired)
         entry["options"] = [{k: (str(v) if isinstance(v, Fraction) else v)
                              for k, v in o.items() if k != "_insts"} for o in opts]
         if mode == "SOLVE":
-            best, entry["rivals"], entry["choice_reason"], entry["infer"] = \
+            best, entry["rivals"], entry["choice_reason"], entry["infer"], saved = \
                 choose_solve(case, opts)
+            if saved is not None and write:
+                entry["infer_log"] = save_infer(saved, base_dir)
         else:
             best, entry["rivals"], entry["choice_reason"] = choose_explore(opts)
         entry["chosen"] = best["name"]
@@ -330,14 +441,18 @@ def run(case, base_dir=None, steps=1, write=True):
     rep["final_state"] = log[-1]["state_after"] if log else None
     if len(done) == steps:
         rep.update(verdict="STEPPED", status="PROPOSED")
-    rep["replay_matches"] = replay(log) == {"state": rep["final_state"],
-                                            "candidates": rep["candidates"]}
+    rep["replay"] = replay(log, base_dir)
+    rep["replay_matches"] = (rep["replay"]["verdict"] == "REPRODUCED"
+                             and rep["replay"]["state"] == rep["final_state"]
+                             and rep["replay"]["candidates"] == rep["candidates"])
     return rep
 
 
-def replay(log):
-    """The final state and the candidates made, from the log alone."""
-    state, cands = None, []
+def replay(log, base_dir=None):
+    """The final state and the candidates made, from the log; and every saved
+    branch 5 ranking run again from its file. verdict REPRODUCED, or FAILS
+    with the step and what differs."""
+    state, cands, failures, rerun = None, [], [], 0
     for e in log:
         if e["verdict"] == "INIT":
             state = dict(e["state_after"])
@@ -349,4 +464,35 @@ def replay(log):
             state["now"] = str(Fraction(state["now"]) + Fraction(e["delta"]["time"]))
             if e["candidate"]:
                 cands.append(e["candidate"]["key"])
-    return {"state": state, "candidates": cands}
+            ref = e.get("infer_log")
+            if ref:
+                rerun += 1
+                why = _rerun_infer(e, ref, base_dir)
+                if why:
+                    failures.append({"step": e["step"], "reason": why})
+    return {"verdict": "FAILS" if failures else "REPRODUCED", "failures": failures,
+            "infer_logs_rerun": rerun, "state": state, "candidates": cands}
+
+
+def _rerun_infer(entry, ref, base_dir):
+    path = Path(base_dir or ".") / ref["file"]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        return f"cannot read {ref['file']}: {type(e).__name__}"
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != ref["sha256"]:
+        return f"{ref['file']}: sha256 differs from the step log"
+    try:
+        saved = json.loads(text)
+        rep = infer_rank(saved["input"])
+        if rep["verdict"] != "RANKED":
+            return f"branch 5 does not rank the saved input: {rep['void_reason']}"
+        costs = {r["name"]: Fraction(r["cost"]) for r in entry["rivals"]}
+        again = rival_table(rep, costs)
+    except Exception as e:
+        return f"{ref['file']}: {type(e).__name__}: {e}"
+    if again != entry["rivals"]:
+        return "branch 5 run again gives a different ranking than the step log"
+    if again[0]["name"] != entry["chosen"]:
+        return "the option chosen is not the first of the ranking"
+    return None
