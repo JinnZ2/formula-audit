@@ -1,4 +1,4 @@
-"""tools -- tool table v0. Every entry is PROPOSED. Co-authored.
+"""tools -- tool table v0 (five entries). Every entry is PROPOSED. Co-authored.
 
 A tool needs environment features, has a cost (energy) and a time, and turns
 one feature instance into one candidate. A candidate is a question for the
@@ -23,7 +23,52 @@ TABLE_V0 = [
     {"name": "slot_fill_audit", "needs": ["void_slots"], "cost": "1", "time": "1",
      "status": "PROPOSED",
      "does": "a claim with a slot left VOID: ask for the slot, as a question"},
+    {"name": "frame_edge", "needs": ["declared_scope"], "cost": "1", "time": "1",
+     "status": "PROPOSED",
+     "does": "an environment with a declared scope (place, time, population): ask what "
+             "lies past its edge, as four questions. Questions only, never answers."},
 ]
+
+# frame_edge: the four questions. The wording is fixed here; the tool fills in
+# nothing but the declared scope. It states nothing about the world.
+FRAME_QUESTIONS = (
+    ("UPSTREAM", "what feeds this from outside the scope? (inflow, source, underground, "
+                 "supply)"),
+    ("LAG", "what changed earlier that has not arrived yet?"),
+    ("SHIFT", "what could change suddenly? (wind, pressure, policy)"),
+    ("WHOSE", "whose environment filled the defaults: the case's, or the median's?"),
+)
+MARGIN_REASON = "unfilled frame-edge slots"
+
+
+def _blank(x):
+    return x is None or not x.strip()
+
+
+def frame_slots(answers):
+    """The four frame-edge slots, each FILLED (answer and source) or VOID.
+    A VOID slot is kept; an answer with no source is VOID, and kept as given."""
+    rows = []
+    for name, question in FRAME_QUESTIONS:
+        a = answers.get(name) or {}
+        answer, source = a.get("answer"), a.get("source")
+        if _blank(answer):
+            state, why = "VOID", "unanswered"
+        elif _blank(source):
+            state, why = "VOID", "answered without a source"
+        else:
+            state, why = "FILLED", None
+        rows.append({"name": name, "question": question, "slot_state": state,
+                     "void_reason": why, "answer": answer, "source": source,
+                     "status": "PROPOSED"})
+    return rows
+
+
+def margin(slots):
+    """The margin flag a set of frame-edge slots raises."""
+    void = [s["name"] for s in slots if s["slot_state"] == "VOID"]
+    return {"margin_required": bool(void), "reason": MARGIN_REASON if void else None,
+            "void_slots": void}
 
 
 def _ref(r):
@@ -82,4 +127,11 @@ def apply_tool(name, inst):
                                             "required": s.get("required")}
                                            for s in d["slots"] if s.get("slot_state") == "VOID"],
                             "note": "the claim says nothing until these are filled"}
+    if name == "frame_edge":
+        slots = frame_slots(inst["answers"])
+        return "question", {"scope": inst["scope"], "frame_slots": slots, **margin(slots),
+                            "note": "questions about what lies past the edge of the declared "
+                                    "scope. The tool states nothing about the world: an "
+                                    "answer and its source are the case's, kept as given "
+                                    "and not read."}
     raise ValueError(f"no such tool: {name}")

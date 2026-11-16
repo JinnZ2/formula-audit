@@ -77,6 +77,10 @@ def main(argv):
             print(f"   chosen {e['chosen']} ({e['choice_reason']})" + (
                 f" -> {c['kind']} {c['key']} in {c['written_to']}, status {c['status']}, "
                 f"tag {c['tag']}" if c else ""))
+            m = e.get("margin") or {}
+            if m.get("margin_required"):
+                print(f"   FLAG   margin_required: {m['reason']}: "
+                      + ", ".join(m["void_slots"]))
             s = e["state_after"]
             print(f"   state  energy {s['energy_available']} time {s['time_available']} "
                   f"now {s['now']}")

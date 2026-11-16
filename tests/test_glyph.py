@@ -537,7 +537,178 @@ class TestExplore(Base):
             self.assertEqual(t["status"], "PROPOSED")
         self.assertEqual([t["name"] for t in TABLE_V0],
                          ["dimensional_analogy", "boundary_probe", "conjugate_map",
-                          "slot_fill_audit"])
+                          "slot_fill_audit", "frame_edge"])
+
+
+ROUND = "explain-then-do round, 2026-11-16"
+FOUR = ["UPSTREAM", "LAG", "SHIFT", "WHOSE"]
+# the two worked cases. The scopes are typed in for the tests; the answers are the
+# ones the rounds turned up, kept as text. The tool reads none of it.
+CAB_SCOPE = {"place": "a truck cab, parked", "time": "a cold night",
+             "population": "the driver"}
+CAB = {"WHOSE": {"answer": "the median's: a cotton base layer was assumed", "source": ROUND},
+       "UPSTREAM": {"answer": "the heat source is the floor vent, not the defrost",
+                    "source": ROUND}}
+ICE_SCOPE = {"place": "the lake, at the crossing", "time": "this week",
+             "population": "people crossing on foot"}
+ICE = {"UPSTREAM": {"answer": "upstream melt; springs", "source": ROUND},
+       "SHIFT": {"answer": "wind breaking the shore ice", "source": ROUND},
+       "LAG": {"answer": "a warm spell upstream", "source": ROUND}}
+
+
+class TestFrameEdge(Base):
+    def frame(self, scope, answers=None, steps=1, **kw):
+        c = self.w.case(tools=[TABLE_V0[4]], scope=scope, **kw)
+        if answers is not None:
+            c["frame_edge"] = answers
+        return self.w.run(c, steps=steps)
+
+    def question(self):
+        return self.w.proposals()["questions"][-1]
+
+    def test_table_entry(self):
+        t = TABLE_V0[4]
+        self.assertEqual((t["name"], t["needs"], t["status"]),
+                         ("frame_edge", ["declared_scope"], "PROPOSED"))
+        self.assertEqual(F(t["cost"]), min(F(x["cost"]) for x in TABLE_V0))   # low
+        env = read_environment(self.w.case()["environment"], self.w.dir)
+        self.assertEqual(env["features"]["declared_scope"], [])
+        r = self.w.run(self.w.case(tools=[TABLE_V0[4]]))          # no scope: not open
+        o = r["log"][1]["options"][0]
+        self.assertEqual((o["open"], o["why_not"]),
+                         (False, "feature not in the environment: declared_scope"))
+        self.assertEqual((r["log"][1]["chosen"], r["margin_required"]), ("inaction", None))
+        self.assertEqual(r["log"][1]["margin"]["state"], "no scope declared")
+
+    def test_output_is_four_questions_logged_as_slots(self):
+        r = self.frame(ICE_SCOPE)
+        self.assertEqual((r["verdict"], r["log"][1]["chosen"]), ("STEPPED", "frame_edge"))
+        q = self.question()
+        self.assertEqual([s["name"] for s in q["frame_slots"]], FOUR)
+        for s in q["frame_slots"]:
+            self.assertTrue(s["question"].endswith("?") or s["question"].endswith(")"))
+            self.assertEqual((s["slot_state"], s["answer"], s["source"], s["void_reason"]),
+                             ("VOID", None, None, "unanswered"))    # kept, not dropped
+        self.assertEqual(q["scope"], ICE_SCOPE)
+        self.assertEqual(self.w.proposals()["proposals"], [])     # a question, not a proposal
+        self.assertNotIn("lhs", q)
+
+    def test_ice_case_all_void_raises_the_margin_flag(self):
+        r = self.frame(ICE_SCOPE)
+        self.assertEqual((r["margin_required"], r["margin_reason"], r["margin_void_slots"]),
+                         (True, "unfilled frame-edge slots", FOUR))
+        q = self.question()
+        self.assertEqual((q["margin_required"], q["reason"], q["void_slots"]),
+                         (True, "unfilled frame-edge slots", FOUR))
+        m = r["log"][1]["margin"]
+        self.assertEqual((m["state"], m["from"]), ("asked", q["glyph"]["key"]))
+        self.assertEqual(r["log"][1]["candidate"]["margin_required"], True)
+
+    def test_ice_case_answers_fill_their_slots(self):
+        r = self.frame(ICE_SCOPE, ICE)
+        got = {s["name"]: s for s in self.question()["frame_slots"]}
+        self.assertEqual({n: s["slot_state"] for n, s in got.items()},
+                         {"UPSTREAM": "FILLED", "LAG": "FILLED", "SHIFT": "FILLED",
+                          "WHOSE": "VOID"})
+        self.assertEqual((got["UPSTREAM"]["answer"], got["UPSTREAM"]["source"]),
+                         ("upstream melt; springs", ROUND))
+        self.assertEqual(got["SHIFT"]["answer"], "wind breaking the shore ice")
+        self.assertEqual(got["LAG"]["answer"], "a warm spell upstream")
+        self.assertEqual((r["margin_required"], r["margin_void_slots"]), (True, ["WHOSE"]))
+        whole = dict(ICE, WHOSE={"answer": "the case's: read at this crossing", "source": ROUND})
+        r = self.frame(ICE_SCOPE, whole)                           # all four: flag down
+        self.assertEqual((r["margin_required"], r["margin_reason"], r["margin_void_slots"]),
+                         (False, None, []))
+
+    def test_base_layer_case(self):
+        r = self.frame(CAB_SCOPE, CAB)
+        got = {s["name"]: s for s in self.question()["frame_slots"]}
+        self.assertEqual((got["WHOSE"]["slot_state"], got["WHOSE"]["answer"]),
+                         ("FILLED", "the median's: a cotton base layer was assumed"))
+        self.assertEqual((got["UPSTREAM"]["slot_state"], got["UPSTREAM"]["answer"]),
+                         ("FILLED", "the heat source is the floor vent, not the defrost"))
+        self.assertIn("the case's, or the median's", got["WHOSE"]["question"])
+        self.assertIn("source", got["UPSTREAM"]["question"])
+        self.assertEqual((r["margin_required"], r["margin_void_slots"]), (True, ["LAG", "SHIFT"]))
+
+    def test_an_answer_with_no_source_stays_void(self):
+        for src in (None, "", "   "):
+            a = {"SHIFT": {"answer": "wind", "source": src}}
+            if src is None:
+                del a["SHIFT"]["source"]
+            self.frame(ICE_SCOPE, a)
+            s = self.question()["frame_slots"][2]
+            self.assertEqual((s["slot_state"], s["void_reason"], s["answer"]),
+                             ("VOID", "answered without a source", "wind"))   # kept as given
+        self.frame(ICE_SCOPE, {"SHIFT": {"answer": " ", "source": ROUND}})
+        self.assertEqual(self.question()["frame_slots"][2]["void_reason"], "unanswered")
+
+    def test_bad_scope_or_answers_are_void(self):
+        for scope, why in (({"place": "the lake", "time": "this week"}, "VOID for: population"),
+                           (dict(ICE_SCOPE, place=" "), "VOID for: place"),
+                           (dict(ICE_SCOPE, season="spring"), "undeclared field 'season'"),
+                           ("the lake", "not a {place, time, population}")):
+            r = self.frame(scope)
+            self.assertEqual(r["verdict"], "VOID", scope)
+            self.assertIn(why, r["void_reason"])
+        for ans, why in (({"DOWNSTREAM": {"answer": "a", "source": "b"}}, "not one of UPSTREAM"),
+                         ({"LAG": "a warm spell"}, "an answer is {answer, source}"),
+                         ({"LAG": {"answer": 3, "source": "b"}}, "answer is not text"),
+                         ({"LAG": {"answer": "a", "source": "b", "sure": True}},
+                          "an answer is {answer, source}"),
+                         ({"LAG": {"answer": "a" * 201, "source": "b"}}, "would truncate"),
+                         (["a"], "not a {slot: {answer, source}}")):
+            r = self.frame(ICE_SCOPE, ans)
+            self.assertEqual(r["verdict"], "VOID", ans)
+            self.assertIn(why, r["void_reason"])
+        self.assertIsNone(self.w.proposals())                      # nothing written
+        c = self.w.case(frame_edge=ICE)                            # answers, and no scope
+        self.assertIn("declares no scope", self.w.run(c)["void_reason"])
+
+    def test_asked_once_per_scope_and_answer_set(self):
+        r = self.frame(ICE_SCOPE, steps=2)
+        self.assertEqual([e["chosen"] for e in r["log"][1:]], ["frame_edge", "inaction"])
+        self.assertEqual(r["log"][2]["options"][0]["why_not"],
+                         "every instance already has a candidate")
+        self.assertEqual(r["margin_required"], True)               # the flag stays up
+        r = self.frame(ICE_SCOPE, ICE)                             # new answers: asked again
+        self.assertEqual(len(self.w.proposals()["questions"]), 2)
+        self.assertEqual(r["margin_void_slots"], ["WHOSE"])        # read from the newest
+        r = self.frame(CAB_SCOPE)                                  # another scope: its own
+        self.assertEqual((r["log"][1]["chosen"], r["margin_void_slots"]), ("frame_edge", FOUR))
+        c = self.w.case(tools=[TABLE_V0[3]], scope=ICE_SCOPE, frame_edge=ICE)
+        r = self.w.run(c)                                          # another tool steps: still read
+        self.assertEqual((r["log"][1]["chosen"], r["margin_void_slots"]),
+                         ("slot_fill_audit", ["WHOSE"]))
+
+    def test_no_claims_from_the_tool_and_ceiling(self):
+        import glyph.tools as gt
+        self.frame(ICE_SCOPE, ICE)
+        q = self.question()
+        self.assertEqual((q["status"], q["glyph"]["tool_status"], q["proof"]),
+                         ("PROPOSED", "PROPOSED", None))
+        self.assertIn("PROPOSED", q["ceiling"])
+        self.assertEqual((q["human_interest"], q["ai_interest"]), (None, None))
+        for s in q["frame_slots"]:                                 # a filled slot is not lifted
+            self.assertEqual(s["status"], "PROPOSED")
+        # what the tool writes of its own: the four fixed questions, nothing about the case
+        self.assertEqual([n for n, _ in gt.FRAME_QUESTIONS], FOUR)
+        own = " ".join(t for _, t in gt.FRAME_QUESTIONS) + q["note"]
+        import re
+        said = set(re.findall(r"[a-z]+", own.lower()))
+        self.assertFalse(said & {"ice", "cotton", "melt", "vent", "spring", "springs",
+                                 "thick", "cm", "inch", "safe", "warm"})
+        self.frame(CAB_SCOPE)                                      # same questions, any scope
+        self.assertEqual([s["question"] for s in self.question()["frame_slots"]],
+                         [t for _, t in gt.FRAME_QUESTIONS])
+
+    def test_in_solve_it_is_a_rival_like_any_tool(self):
+        c = self.w.case("SOLVE", tools=[TABLE_V0[4]], scope=ICE_SCOPE, now="4")
+        r = self.w.run(c)
+        e = r["log"][1]
+        self.assertEqual(sorted(x["name"] for x in e["rivals"]), ["frame_edge", "inaction"])
+        self.assertEqual(r["replay"]["verdict"], "REPRODUCED")
+        self.assertTrue(r["replay_matches"])
 
 
 class TestLog(Base):

@@ -18,6 +18,10 @@ Features read from those records (what a tool can need):
   conjugate_exponents  two exponents p, q with p * q = 1 in the formulas of
                        branch-1 / 2b records (sqrt counts as 1/2)
   void_slots           a branch-4 record with a slot left VOID
+  declared_scope       the case declares the scope the environment was drawn
+                       in: {place, time, population}. This one is read from
+                       the case, not from a record: where the edge of the
+                       environment was put is the operator's statement.
 """
 import ast
 import json
@@ -29,7 +33,55 @@ from numcheck.tiers import exact_number
 from unitaudit.check import split_sides
 
 BRANCHES = ("1", "2a", "2b", "4", "5")
-FEATURES = ("shared_dims", "mixed_region", "conjugate_exponents", "void_slots")
+FEATURES = ("shared_dims", "mixed_region", "conjugate_exponents", "void_slots",
+            "declared_scope")
+SCOPE_FIELDS = ("place", "time", "population")
+FRAME_SLOTS = ("UPSTREAM", "LAG", "SHIFT", "WHOSE")
+FRAME_WIDTH = 200
+
+
+def read_scope(scope):
+    """The declared scope of a case, or None when none is declared. Raises Void
+    on one that is half declared: a scope names place, time and population."""
+    if scope is None:
+        return None
+    if not isinstance(scope, dict):
+        raise Void("scope is not a {place, time, population} record")
+    extra = [k for k in scope if k not in SCOPE_FIELDS]
+    if extra:
+        raise Void(f"scope: undeclared field {extra[0]!r}")
+    missing = [k for k in SCOPE_FIELDS
+               if not isinstance(scope.get(k), str) or not scope[k].strip()]
+    if missing:
+        raise Void("scope is VOID for: " + ", ".join(missing))
+    return {k: scope[k] for k in SCOPE_FIELDS}
+
+
+def read_frame_answers(answers, scope):
+    """The answers a case gives to the frame-edge questions: {slot: {answer,
+    source}}. Text is kept whole and never read. Raises Void on a slot that is
+    not one of the four, a malformed answer, or answers with no scope."""
+    if answers is None:
+        return {}
+    if scope is None:
+        raise Void("frame_edge answers are given and the case declares no scope")
+    if not isinstance(answers, dict):
+        raise Void("frame_edge is not a {slot: {answer, source}} table")
+    out = {}
+    for name, a in answers.items():
+        if name not in FRAME_SLOTS:
+            raise Void(f"frame_edge: {name!r} is not one of " + ", ".join(FRAME_SLOTS))
+        if not isinstance(a, dict) or any(k not in ("answer", "source") for k in a):
+            raise Void(f"frame_edge {name}: an answer is {{answer, source}}")
+        for k in ("answer", "source"):
+            v = a.get(k)
+            if v is not None and not isinstance(v, str):
+                raise Void(f"frame_edge {name}: {k} is not text")
+            if isinstance(v, str) and len(v) > FRAME_WIDTH:
+                raise Void(f"frame_edge {name}: would truncate: {k} has {len(v)} "
+                           f"characters, the field is X({FRAME_WIDTH})")
+        out[name] = {"answer": a.get("answer"), "source": a.get("source")}
+    return out
 
 
 def read_record(report, branch, record):
@@ -99,9 +151,11 @@ def _exponents(formula):
     return out
 
 
-def read_environment(refs, base_dir):
+def read_environment(refs, base_dir, scope=None, frame_answers=None):
     """Returns {"records": [...], "features": {name: [instance]}, "newest": t}.
     Raises Void naming the reference that does not check."""
+    scope = read_scope(scope)
+    frame_answers = read_frame_answers(frame_answers, scope)
     if not isinstance(refs, list) or not refs:
         raise Void("environment: no references")
     rows = []
@@ -156,4 +210,8 @@ def read_environment(refs, base_dir):
                 srcs = [ra] if ra is rb else [ra, rb]
                 feats["conjugate_exponents"].append(
                     {"sources": srcs, "p": p, "q": q, "base": base})
-    return {"records": rows, "features": feats, "newest": max(r["at"] for r in rows)}
+    if scope is not None:
+        feats["declared_scope"].append({"sources": [], "scope": scope,
+                                        "answers": frame_answers})
+    return {"records": rows, "features": feats, "newest": max(r["at"] for r in rows),
+            "scope": scope}

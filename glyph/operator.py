@@ -47,6 +47,14 @@ Definition: the README section "Glyph (branch 3 reasoning operator)".
             logged. The branch 5 input and log of each ranking are saved to a
             file named in the step log with its sha256; replay re-runs branch
             5 from that file and FAILS if the file or the result differs.
+  scope     a case may declare the scope its environment was drawn in:
+            {place, time, population}. The tool frame_edge then asks four
+            questions about what lies past that edge (UPSTREAM, LAG, SHIFT,
+            WHOSE), each logged as a slot: answered in the case's frame_edge
+            field with a source -> FILLED; otherwise VOID, and kept. Any VOID
+            slot raises the case's margin flag: margin_required true, reason
+            "unfilled frame-edge slots". Not asked yet -> margin_required null.
+            The tool writes questions only; it states nothing about the world.
   ceiling   nothing the glyph writes is above PROPOSED. Only checks by 2a /
             2b move anything further, and they are not run here.
 """
@@ -60,13 +68,13 @@ from infer.ladder import Void, rank as infer_rank
 from unitaudit.check import check_formula as unit_check
 
 from .environment import FEATURES, read_environment
-from .tools import TABLE_V0, _ref, apply_tool
+from .tools import TABLE_V0, _ref, apply_tool, margin
 
-VERSION = "glyph branch3-2"
+VERSION = "glyph branch3-3"
 MODES = ("SOLVE", "EXPLORE")
 CASE_FIELDS = ("purpose", "environment", "energy_budget", "time_budget", "needed_function_met",
                "now", "default_drift_rate", "units", "gain", "inaction_time", "tools",
-               "evidence", "priors", "proposals", "note")
+               "evidence", "priors", "proposals", "note", "scope", "frame_edge")
 UNIT_FIELDS = ("energy", "cost", "time", "drift_rate")       # always needed
 OPTIONAL_UNITS = ("gain",)                                   # needed when a step ranks
 LOG_DIR = "glyph_log"
@@ -91,6 +99,8 @@ def _budget(b, what):
 def candidate_key(tool, inst):
     text = tool + "|" + "|".join(sorted(r["sha256"] for r in inst["sources"])) \
         + "|" + str(inst.get("p", "")) + "|" + str(inst.get("q", ""))
+    if inst.get("scope") is not None:        # a scope, with the answers given so far
+        text += "|" + json.dumps([inst["scope"], inst.get("answers")], sort_keys=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -112,6 +122,21 @@ def read_proposals(path):
 def _paired(data):
     return {e["glyph"]["key"] for part in ("proposals", "questions") for e in data[part]
             if isinstance(e, dict) and isinstance(e.get("glyph"), dict)}
+
+
+def frame_margin(data, scope):
+    """The margin flag of a case, from the newest frame_edge question asked on
+    its scope. Not asked yet, or no scope: margin_required stays null."""
+    out = {"margin_required": None, "reason": None, "void_slots": None,
+           "from": None, "state": "no scope declared" if scope is None
+           else "frame_edge has not been asked on this scope"}
+    if scope is None:
+        return out
+    for q in data["questions"]:
+        g = q.get("glyph") if isinstance(q, dict) else None
+        if isinstance(g, dict) and g.get("tool") == "frame_edge" and q.get("scope") == scope:
+            out = {**margin(q["frame_slots"]), "from": g["key"], "state": "asked"}
+    return out
 
 
 def read_state(case):
@@ -368,7 +393,7 @@ def step(case, state, base_dir, n, log, write=True):
              "purpose": case.get("purpose"), "mode": None, "gate": None,
              "environment": None, "options": None, "rivals": None, "chosen": None,
              "choice_reason": None, "infer": None, "infer_log": None, "units": None,
-             "gain": None,
+             "gain": None, "margin": None,
              "candidate": None,
              "state_before": _show(state), "state_after": _show(state)}
     log.append(entry)
@@ -378,7 +403,8 @@ def step(case, state, base_dir, n, log, write=True):
             raise Void(f"undeclared field {extra[0]!r}")
         mode, entry["gate"] = gate(case.get("purpose"), case, state)
         entry["mode"] = mode
-        env = read_environment(case.get("environment"), base_dir)
+        env = read_environment(case.get("environment"), base_dir, case.get("scope"),
+                               case.get("frame_edge"))
         ppath = Path(base_dir or ".") / case.get("proposals", "proposals.json")
         data = read_proposals(ppath)
         paired = _paired(data)
@@ -426,13 +452,18 @@ def step(case, state, base_dir, n, log, write=True):
             entry["candidate"] = {"key": key, "kind": kind, "written_to": str(ppath.name),
                                   "list": part, "status": "PROPOSED", "tag": mode,
                                   "lhs": body.get("lhs"), "rhs": body.get("rhs"),
-                                  "word": body.get("word")}
+                                  "word": body.get("word"),
+                                  "margin_required": body.get("margin_required"),
+                                  "void_slots": body.get("void_slots")
+                                  if best["name"] == "frame_edge" else None}
             delta["energy"] = best["cost"]
             if write:                                 # read the world again before going on
-                env2 = read_environment(case.get("environment"), base_dir)
+                env2 = read_environment(case.get("environment"), base_dir,
+                                        case.get("scope"), case.get("frame_edge"))
                 entry["environment_after"] = {
                     "features": {f: len(v) for f, v in env2["features"].items()},
                     "candidates_made": len(_paired(read_proposals(ppath)))}
+        entry["margin"] = frame_margin(data, env["scope"])
         state["energy"]["available"] -= delta["energy"]
         state["time"]["available"] -= delta["time"]
         state["now"] += delta["time"]
@@ -458,6 +489,7 @@ def run(case, base_dir=None, steps=1, write=True):
     log = []
     rep = {"tool": VERSION, "verdict": "VOID", "void_reason": None, "status": None,
            "ceiling": "nothing the glyph writes is above PROPOSED",
+           "margin_required": None, "margin_reason": None, "margin_void_slots": None,
            "tool_table": "v0, every entry PROPOSED" if not (isinstance(case, dict)
                                                             and case.get("tools")) else "case",
            "steps_asked": steps, "log": log, "human_interest": None, "ai_interest": None}
@@ -478,6 +510,10 @@ def run(case, base_dir=None, steps=1, write=True):
     rep["steps_done"] = len(done)
     rep["candidates"] = [e["candidate"]["key"] for e in done if e["candidate"]]
     rep["final_state"] = log[-1]["state_after"] if log else None
+    if done and done[-1].get("margin"):
+        m = done[-1]["margin"]
+        rep.update(margin_required=m["margin_required"], margin_reason=m["reason"],
+                   margin_void_slots=m["void_slots"])
     if len(done) == steps:
         rep.update(verdict="STEPPED", status="PROPOSED")
     rep["replay"] = replay(log, base_dir)

@@ -368,7 +368,7 @@ units           the statement is about numbers; the units on the proposal are no
 
 Status: the definition below is PROPOSED. `glyph/` implements it as a v0 that
 passes its own tests within tested scope (see "What is built" at the end of
-this section). The tool table is four PROPOSED tools; whether they are the
+this section). The tool table is five PROPOSED tools; whether they are the
 right tools, or useful, is not established.
 
 **What it is.** A compressed reasoning operator, in the way a differential
@@ -520,11 +520,48 @@ boundary_probe       mixed_region: a branch-2b record that is MIXED  lhs - rhs =
 conjugate_map        conjugate_exponents: exponents p, q with        ( base ** p ) ** q = base
                      p * q = 1 in branch-1 / 2b formulas
 slot_fill_audit      void_slots: a branch-4 record with a VOID slot  a question naming the slots
+frame_edge           declared_scope: the case declares the scope     four questions about what
+                     its environment was drawn in                    lies past that edge, each
+                     {place, time, population}                       logged as a slot
 ```
+
+frame_edge: where the edge of the environment was drawn
+
+```text
+case      scope       {place, time, population}, all three; half declared -> VOID
+          frame_edge  {slot: {answer, source}}, optional: the case's answers
+                      |
+tool      questions only, wording fixed, cost 1 (the lowest in the table):
+            UPSTREAM  what feeds this from outside the scope? (inflow, source,
+                      underground, supply)
+            LAG       what changed earlier that has not arrived yet?
+            SHIFT     what could change suddenly? (wind, pressure, policy)
+            WHOSE     whose environment filled the defaults: the case's, or the median's?
+                      |
+slots     answer + source -> FILLED      unanswered -> VOID, kept
+          answer with no source -> VOID ("answered without a source"), kept as given
+                      |
+margin    any VOID slot -> margin_required: true, reason "unfilled frame-edge slots",
+          on the question, the step and the report. All four FILLED -> false.
+          Not asked yet, or no scope -> null (not false).
+```
+
+Source of the tool: two explain-then-do rounds on 2026-11-16 (base layers in a
+cold cab; lake-ice safety), where the misses came from where the environment
+edge was drawn, not from missing facts. The rounds are carried from the
+repository owner and are not re-run here; the two cases are in the tests as
+text. The owner's note on the ice case, "4 in rule -> 8 in practice", is
+carried too: the tool raises the flag and computes no margin.
 
 Limits of the v0
 
 ```text
+frame_edge     states nothing about the world. An answer and its source are text from
+               the case, kept and not read: "nothing" with a source counts as FILLED.
+               It does not say how large a margin should be, and no other branch reads
+               margin_required yet. Four questions are not a complete list of what can
+               lie past an edge. The scope is the case's statement, not a record that is
+               re-read. Whether the tool is useful is not established: PROPOSED.
 ceiling        nothing the glyph writes is above PROPOSED. It runs no check itself;
                a candidate goes further only through 2b and then 2a.
 candidates     are questions made by a fixed rule from one record or a pair. Many
