@@ -1,16 +1,24 @@
-# unitaudit, branch 1 (unit audit)
+# formula-audit
 
-Status: dimension check implemented and passing its own tests within tested
-scope. Slots (limit, sign, magnitude range) are recorded, NOT checked. The
-scanner is a placeholder. Three known blind spots are listed under Limits and
-are not built. Repository: JinnZ2/formula-audit. Licence: CC0, as the
-repository's. Co-authored.
+Status: branch 1 (unit audit) is implemented and passes its own tests within
+tested scope. Its slots (limit, sign, magnitude range) are recorded, NOT
+checked. Its scanner is a placeholder. Branches 2 and 3 are not built and are
+not specified in this repository yet. Three known blind spots are listed
+below and are not built.
 
-This file sits inside the package so the repository's own README and
-LICENSE stay as their author wrote them. The one workflow added with this
-package is `.github/workflows/unitaudit.yml`; it touches no other workflow. When this branch was pushed
-(2026-11-16) the remote had no branch and no files; none of those three
-were present to read.
+License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
+
+## Three branches
+
+```text
+branch 1   unit audit      unitaudit/   BUILT: dimension check, PASS / FAIL / VOID
+branch 2   VOID            not named or specified here
+branch 3   VOID            not named or specified here
+```
+
+A void branch stays void. It is not filled in to make the list look complete.
+
+## Branch 1: unit audit
 
 ```text
 formulas.json --> symbols -> dims (7 Fractions: L M T I Theta N J)
@@ -28,7 +36,18 @@ formulas.json --> symbols -> dims (7 Fractions: L M T I Theta N J)
 python3 -m unitaudit check formulas.json [--json]   # exit 0 all PASS | 1 any FAIL | 3 VOID, no FAIL | 2 usage
 python3 -m unitaudit scan PATH [-o draft.json]      # placeholder; draft entries PROPOSED, units null
 python3 -m unittest discover -s tests               # prints its own count
-# all three from the repository root
+```
+
+Rules
+
+```text
+a + b, a - b, lhs = rhs    equal dimensions
+a * b, a / b               dimensions multiply / divide
+a ** k                     k dimensionless; on a base with a dimension, k must be a
+                           literal number, else VOID (the result cannot be computed)
+exp log sin cos tan (x)    x dimensionless
+sqrt(x), abs(x)            x ** (1/2); dimension of x
+unknown anything           VOID with the reason; an internal error is VOID too
 ```
 
 Input entry: `{formula, symbols, source_path, slots, status?}` where each
@@ -56,22 +75,24 @@ slot_state UNCHECKED   given, and NOT checked: no values to evaluate it with.
                        UNCHECKED is not a pass. No slot is ever checked here.
 ```
 
-Limits
+## Limits
 
 ```text
 PASS                  means the dimensions agree, not that the formula is right
 unit table            SI base, N J W Pa Hz V C ohm T Wb, dimensionless; anything else is VOID
+scanner               placeholder: one-'=' lines and `backtick` spans that parse; misses
+                      prose and LaTeX formulas, picks up ordinary assignments
+formulas.json         example input; its units were typed in, not read from a source
 stdlib used           ast, fractions, json, plus sys and pathlib (CLI, scanner), unittest
-python                3.10 to 3.13 run by .github/workflows/unitaudit.yml; see the
-                      workflow's own runs for whether 3.10 passes
+python                3.10 (floor) and 3.13 run by .github/workflows/ci.yml; see its runs
 ```
 
-Known blind spots, not built
+## Known blind spots, not built
 
 ```text
 scale                 no scale factors: km vs m, eV vs J read as the same
 affine temperature    degC vs K: an offset is not a dimension; both read as Theta
-angle                 rad is dimensionless here, so sin(omega) with omega in rad/s
-                      still fails, but a dropped or extra angle factor does not show,
-                      and a torque and an energy read alike
+angle                 rad is dimensionless here, so a dropped or extra angle factor
+                      (omega*t against f*t) does not show, and a torque and an
+                      energy read alike
 ```
