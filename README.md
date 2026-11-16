@@ -634,9 +634,28 @@ PASS            the claim is well-formed: nothing required is missing and any
                 checked bound holds. It does not say the claim is true.
 table           the shipped places.json is an example written here, all PROPOSED,
                 holder null; no holder has confirmed any entry
-Lojban          the shapes (glare, snura, jibni, zmadu, xamgu) and the meanings of
-                se'o, ja'o and ka'u are recalled, not checked against a Lojban source:
-                the reference pages could not be reached from the build.
+Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (received
+                2026-11-17), quotes 30 place structures from jbovlaste and 11 evidentials
+                from the CLL, each with its URL. This build could not reach lojban.org
+                and re-read none of it. It bears out the five recalled shapes (glare,
+                snura, jibni, zmadu, xamgu: worded differently, same places) and the
+                meanings of se'o, ja'o and ka'u.
+table vs        the place table was NOT changed to match the reference; it is PROPOSED
+reference       and a word's slots are the holder's to set. Where they differ:
+                  safe         table has x3 "for whom"; snura has two places
+                  hostile      table has x3 "by what standard"; le'onmo has two places
+                  better       table is xamgu-shaped (3 slots); xagmau has five places,
+                               among them "than what" and "by amount"
+                  appropriate  table is xamgu-shaped; the reference maps it to mapti
+                               (fits x2 in aspect x3)
+                  efficient    table is zmadu-shaped; the reference finds no Lojban word
+                  warm         table is glare-shaped (temperature); the social sense
+                               maps to xendo (kind to x2 in behaviour x3)
+                tests/test_lojban_reference.py records these differences.
+se'o            the CLL calls it knowledge by "internal experience not directly available
+                to others, such as a dream, vision, or personal revelation". Using it for
+                any report of one's own feeling ("I feel warm") is this repository's
+                reading, wider than the examples the CLL gives.
 oral record     the four checks are answered y / n by the person named in answered_by.
                 Nothing here tests whether an account really is shared,
                 multi-generational, checkable or not central; the row is taken as
