@@ -58,11 +58,15 @@ class TestReference(unittest.TestCase):
         # record. The table is PROPOSED either way: the holder has confirmed nothing.
         slots = {w: len(e["slots"]) for w, e in TABLE.items()}
         # KEPT by the union rule: safe keeps "for whom", which snura does not have
-        self.assertEqual((slots["safe"], BY["safe"]["gismu"]), (3, "snura"))       # snura: 2
+        self.assertEqual((slots["safe"], BY["safe"]["gismu"]), (4, "snura"))       # snura: 2
         self.assertIn("from threat x2", BY["safe"]["place_structure_verbatim"])
         self.assertEqual(TABLE["safe"]["slots"][2]["role"], "for whom")
         self.assertEqual(TABLE["safe"]["slots"][2]["source_predicate"], "ckape")
-        self.assertIn("harmful to x2", BY["dangerous"]["place_structure_verbatim"])
+        self.assertIn("harmful to x2 under conditions x3",
+                      BY["dangerous"]["place_structure_verbatim"])
+        x4 = TABLE["safe"]["slots"][3]                              # ckape's x3, one sense only
+        self.assertEqual((x4["role"], x4["source_predicate"], x4["senses"]),
+                         ("under conditions", "ckape", ["NOT_PERILOUS"]))
         # KEPT: efficient has no Lojban word in the reference, and the table says so
         self.assertEqual((TABLE["efficient"]["shape"], BY["efficient"]["gismu"]), (None, None))
         self.assertEqual((TABLE["efficient"]["lojban"], BY["efficient"]["structure_status"]),

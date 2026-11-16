@@ -604,12 +604,13 @@ places.json   word -> ordered slots (name, role, required, status tag, source_pr
                              SOCIAL:   x3 to whom, x4 in what behaviour (xendo)
               safe         x1 what is safe (snura), x3 for whom (ckape)      FEAR
                              PROTECTED:    x2 from threat (snura)
-                             NOT_PERILOUS: no further place
+                             NOT_PERILOUS: x4 under conditions (ckape)
               hostile      x1, x2 toward whom (le'onmo)                      EMOTIVE
               more         x1, x2 than what, x3 in what property,            COMPARATIVE
                            x4 by what amount, optional (zmadu)
               less         the same four places (mleca)                      COMPARATIVE
-              efficient    x1, x2 useful output, x3 input supplied           COMPARATIVE
+              efficient    x1, x2 useful output, x3 input supplied,          COMPARATIVE
+                           x4 process, x5 baseline compared against
                            (physics_def); lojban: VOID
               better       x1, x2 than what, x3 for whom, x4 by what         JUDGMENT
                            standard, x5 by what amount, optional (xagmau)
@@ -709,12 +710,12 @@ reference       a word's slots are the holder's to set. Union rule: a slot the t
                   kept         safe "for whom": snura has two places; ckape carries it
                                efficient: no Lojban word in the reference; lojban VOID
                                stays in the entry, slots are physics_def
-                  not taken    ckape's "under conditions x3" is not a slot of safe
+                               safe NOT_PERILOUS also takes ckape's "under conditions"
                 tests/test_lojban_reference.py records both lists.
 choices made    not given by the reference, made in this build and PROPOSED:
 here            which predicate stands behind each sense of safe (PROTECTED = snura,
-                NOT_PERILOUS = ckape); efficient's three physics_def slots (useful
-                output over input supplied); the status each new evidential maps to.
+                NOT_PERILOUS = ckape); the status each new evidential maps to.
+                efficient's five physics_def slots are the owner's, by order.
 se'o            the CLL calls it knowledge by "internal experience not directly available
                 to others, such as a dream, vision, or personal revelation". Using it for
                 any report of one's own feeling ("I feel warm") is this repository's

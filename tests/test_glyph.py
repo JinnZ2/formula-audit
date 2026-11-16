@@ -501,7 +501,7 @@ class TestExplore(Base):
                          ("EXPLORE", "PROPOSED"))
         q = data["questions"][0]
         self.assertEqual((q["word"], q["tag"], q["status"]), ("safe", "EXPLORE", "PROPOSED"))
-        self.assertEqual([s["name"] for s in q["void_slots"]], ["x2", "x3"])
+        self.assertEqual([s["name"] for s in q["void_slots"]], ["x2", "x3", "x4"])
         self.assertIn("no tool has an unpaired feature", r["log"][3]["choice_reason"])
 
     def test_all_four_tools(self):

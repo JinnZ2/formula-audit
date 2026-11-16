@@ -1,5 +1,5 @@
 {
- "note": "place table v2: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. Realigned to the relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17; relayed, not re-read by this build). Each slot names the predicate its place comes from in source_predicate: a gismu or lujvo of the reference, or physics_def where the reference has no Lojban word. Union rule: a slot the table already had is kept when a predicate of the reference carries that place (safe 'for whom', from ckape); a slot no predicate of the reference carries is dropped (the standard of hostile and of appropriate). efficient has no Lojban word in the reference: lojban VOID is kept in the entry and its slots are physics_def (useful output over input supplied), typed in for this build. See the README.",
+ "note": "place table v2: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. Realigned to the relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17; relayed, not re-read by this build). Each slot names the predicate its place comes from in source_predicate: a gismu or lujvo of the reference, or physics_def where the reference has no Lojban word. Union rule: a slot the table already had is kept when a predicate of the reference carries that place (safe 'for whom', from ckape); a slot no predicate of the reference carries is dropped (the standard of hostile and of appropriate). efficient has no Lojban word in the reference: lojban VOID is kept in the entry and its slots are physics_def (thing, useful output, input supplied, process, baseline compared against), set by the repository owner's order. See the README.",
  "holder": null,
  "words": {
   "warm": {
@@ -99,6 +99,16 @@
      "required": true,
      "status": "PROPOSED",
      "source_predicate": "ckape"
+    },
+    {
+     "name": "x4",
+     "role": "under conditions",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "ckape",
+     "senses": [
+      "NOT_PERILOUS"
+     ]
     }
    ]
   },
@@ -249,6 +259,20 @@
     {
      "name": "x3",
      "role": "input supplied",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "physics_def"
+    },
+    {
+     "name": "x4",
+     "role": "process",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "physics_def"
+    },
+    {
+     "name": "x5",
+     "role": "baseline compared against",
      "required": true,
      "status": "PROPOSED",
      "source_predicate": "physics_def"

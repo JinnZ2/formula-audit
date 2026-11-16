@@ -39,7 +39,7 @@ class TestTable(unittest.TestCase):
             self.assertEqual(entry["status"], "PROPOSED")
             for s in entry["slots"]:
                 self.assertEqual(s["status"], "PROPOSED")
-        self.assertEqual([s["name"] for s in WORDS["safe"]["slots"]], ["x1", "x2", "x3"])
+        self.assertEqual([s["name"] for s in WORDS["safe"]["slots"]], ["x1", "x2", "x3", "x4"])
         self.assertEqual([s["role"] for s in WORDS["warm"]["slots"]],
                          ["what is warm", "by standard", "to whom",
                           "in what actions or behaviour"])
@@ -52,23 +52,44 @@ class TestTable(unittest.TestCase):
             for g in preds:                               # a word of the reference, or physics_def
                 self.assertTrue(g == "physics_def" or g in known, (w, g))
         self.assertEqual(got["warm"], ["glare", "glare", "xendo", "xendo"])
-        self.assertEqual(got["safe"], ["snura", "snura", "ckape"])
+        self.assertEqual(got["safe"], ["snura", "snura", "ckape", "ckape"])
         self.assertEqual(got["hostile"], ["le'onmo"] * 2)
         self.assertEqual(got["better"], ["xagmau"] * 5)
         self.assertEqual(got["appropriate"], ["mapti"] * 3)
         self.assertEqual((got["more"], got["less"]), (["zmadu"] * 4, ["mleca"] * 4))
         self.assertEqual(got["near"], ["jibni"] * 3)
         r = claim("safe", FULL)                           # and it rides along in the record
-        self.assertEqual([x["source_predicate"] for x in r["slots"]], ["snura", "snura", "ckape"])
+        self.assertEqual([x["source_predicate"] for x in r["slots"]],
+                         ["snura", "snura", "ckape", "ckape"])
 
     def test_efficient_keeps_lojban_void(self):
         e = WORDS["efficient"]
         self.assertEqual((e["lojban"], e["shape"]), ("VOID", None))
         self.assertEqual({s["source_predicate"] for s in e["slots"]}, {"physics_def"})
-        r = claim("efficient", {"x1": "this pump", "x2": "water lifted", "x3": "fuel burned"})
+        self.assertEqual([s["role"] for s in e["slots"]],
+                         ["what is efficient", "useful output", "input supplied", "process",
+                          "baseline compared against"])
+        whole = {"x1": "this pump", "x2": "water lifted", "x3": "fuel burned",
+                 "x4": "lifting from the well", "x5": "the old pump"}
+        r = claim("efficient", whole)
         self.assertEqual((r["verdict"], r["lojban"], r["shape"]), ("PASS", "VOID", None))
         r = claim("efficient", {"x1": "this pump"})
-        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2", "x3"]))
+        self.assertEqual((r["verdict"], r["missing_required"]),
+                         ("DEGRADED", ["x2", "x3", "x4", "x5"]))
+
+    def test_efficient_missing_baseline_is_degraded_naming_it(self):
+        whole = {"x1": "this pump", "x2": "water lifted", "x3": "fuel burned",
+                 "x4": "lifting from the well", "x5": "the old pump"}
+        r = claim("efficient", {k: v for k, v in whole.items() if k != "x5"})
+        self.assertEqual((r["verdict"], r["pass_equivalent"], r["missing_required"]),
+                         ("DEGRADED", False, ["x5"]))
+        m = r["degraded"]["missing"][0]
+        self.assertEqual((m["name"], m["role"], m["reason"]),
+                         ("x5", "baseline compared against", "required slot empty"))
+        self.assertEqual(r["degraded"]["kept"], ["x1", "x2", "x3", "x4"])     # kept, usable
+        r = claim("efficient", {k: v for k, v in whole.items() if k != "x4"})
+        self.assertEqual((r["missing_required"], r["degraded"]["missing"][0]["role"]),
+                         (["x4"], "process"))
         for change in (lambda e: e.update(shape="zmadu"),             # VOID and a shape
                        lambda e: e["slots"][0].update(source_predicate="zmadu"),
                        lambda e: e.update(lojban="unknown")):
@@ -115,7 +136,7 @@ class TestClaims(unittest.TestCase):
         self.assertEqual(r["degraded"]["kept"], ["x1"])
         self.assertEqual(r["usable"]["slots"], {"x1": "the bridge"})
         self.assertEqual([(s["name"], s["slot_state"]) for s in r["slots"]],
-                         [("x1", "FILLED"), ("x2", "VOID"), ("x3", "VOID")])
+                         [("x1", "FILLED"), ("x2", "VOID"), ("x3", "VOID"), ("x4", "VOID")])
         for empty in ("", "   ", None, {"text": ""}, {"text": None}):
             r = claim("safe", dict(FULL, x3=empty))
             self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x3"]), empty)
@@ -152,8 +173,8 @@ class TestClaims(unittest.TestCase):
         self.assertIn("undeclared field: 'certainty'", r["void_reason"])
         r = claim("cosy", {"x1": "the room"})
         self.assertIn("unknown word 'cosy'", r["void_reason"])
-        r = claim("safe", dict(FULL, x4="extra"))
-        self.assertIn("undeclared slot for 'safe': x4", r["void_reason"])
+        r = claim("safe", dict(FULL, x5="extra"))
+        self.assertIn("undeclared slot for 'safe': x5", r["void_reason"])
         r = claim("safe", dict(FULL, x2={"text": "fire", "weight": 3}))
         self.assertIn("undeclared field 'weight'", r["void_reason"])
         r = claim("safe", FULL, evidential="certain")
@@ -499,12 +520,25 @@ class TestV1(unittest.TestCase):
         r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="PROTECTED")
         self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2"]))
         # NOT_PERILOUS (ckape): no threat place; for whom is asked in both senses
-        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="NOT_PERILOUS")
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians", "x4": "in a dry summer"},
+                  sense="NOT_PERILOUS")
         self.assertEqual((r["verdict"], r["sense_predicate"]), ("PASS", "ckape"))
         self.assertEqual((r["slots"][1]["slot_state"], r["slots"][1]["in_sense"]),
                          ("VOID", False))                          # kept as a void slot
         r = claim("safe", {"x1": "the bridge"}, sense="NOT_PERILOUS")
-        self.assertEqual(r["missing_required"], ["x3"])
+        self.assertEqual(r["missing_required"], ["x3", "x4"])
+        r = claim("safe", FULL, sense="PROTECTED")                 # conditions: not asked here
+        self.assertEqual((r["verdict"], r["slots"][3]["in_sense"]), ("PASS", False))
+
+    def test_safe_not_perilous_missing_conditions_is_degraded_naming_it(self):
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="NOT_PERILOUS")
+        self.assertEqual((r["verdict"], r["pass_equivalent"], r["missing_required"]),
+                         ("DEGRADED", False, ["x4"]))
+        m = r["degraded"]["missing"][0]
+        self.assertEqual((m["name"], m["role"], m["reason"]),
+                         ("x4", "under conditions", "required slot empty"))
+        self.assertEqual(r["slots"][3]["source_predicate"], "ckape")
+        self.assertEqual(r["degraded"]["kept"], ["x1", "x3"])
         r = claim("safe", FULL, sense="SAFE_ENOUGH")               # a bad tag
         self.assertEqual(r["verdict"], "VOID")
         self.assertIn("sense 'SAFE_ENOUGH' is not one of PROTECTED, NOT_PERILOUS",
