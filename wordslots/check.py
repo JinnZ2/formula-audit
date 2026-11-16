@@ -1,14 +1,23 @@
-"""check -- a word claims nothing until its slots are filled. Co-authored. v1.
+"""check -- a word claims nothing until its slots are filled. Co-authored. v2.
 
 PLACE TABLE (JSON): word -> ordered slots, Lojban-style.
-    warm:  x1 what is warm, x2 by standard
-    safe:  x1 what is safe, x2 from threat, x3 for whom
+    warm:  x1 what is warm; PHYSICAL: x2 by standard; SOCIAL: x3 to whom, x4 in what behaviour
+    safe:  x1 what is safe, x2 from threat (PROTECTED only), x3 for whom
     more:  x1 what is more, x2 than what, x3 in what property, x4 by what amount
-  Each slot: name, role, required (true / false), its own status tag, and
-  optionally numeric bounds. Each word: status, class (JUDGMENT / COMPARATIVE /
-  EMOTIVE / FEAR, or null), shape (the Lojban root it is shaped on; recalled,
-  not checked against a Lojban source). A table entry is PROPOSED until the
-  holder of the word confirms it; this checker never changes a tag.
+  Each slot: name, role, required (true / false), its own status tag,
+  source_predicate (the gismu or lujvo its place comes from, or "physics_def"),
+  optionally numeric bounds, and optionally senses (the senses it belongs to).
+  Each word: status, class (JUDGMENT / COMPARATIVE / EMOTIVE / FEAR, or null),
+  shape (the Lojban word it is shaped on), and optionally senses
+  {sense: source predicate} with sense_field, the claim field that picks one
+  ("reading" for warm, "sense" for safe). lojban "VOID" marks a word the
+  reference has no Lojban for (efficient); its slots are physics_def.
+  The shapes follow a relayed reference (REFERENCES/lojban_place_structures.json),
+  which this build did not re-read. A table entry is PROPOSED until the holder
+  of the word confirms it; this checker never changes a tag.
+  SENSE: a slot bound to senses is asked for only under one of them. A word
+  with sense_field "sense" and no sense given is DEGRADED, naming sense; a
+  sense the word does not declare is VOID.
 
 CLAIM RECORD: fixed fields, declared here before any record is read
 (COBOL-style: a field that was not declared is an error, not extra data),
@@ -18,6 +27,8 @@ picture, is VOID ("would truncate"): nothing is ever cut to fit.
     slots               {slot name: filling}; a filling is text X(40), or
                         {"text", "value", "unit", "status", "is"}
     reading     X(8)    PHYSICAL / SOCIAL; required for an EMOTIVE word
+    sense       X(12)   which sense of the word, where the table declares senses
+                        under sense_field "sense" (safe: PROTECTED / NOT_PERILOUS)
     magnitude           {"value": S9(7)V9(4), "unit": X(12)}
     evidential  X(10)   how the claimant knows (below)
     speaker     X(40)   who is making the claim
@@ -32,6 +43,10 @@ EVIDENTIAL -> STATUS of the claim, carried, never upgraded:
     observed  -> OBSERVED     concluded -> DERIVED     defined -> OBSERVED
     hearsay   -> PROPOSED     opinion   -> PROPOSED
     ja'o      -> DERIVED      (Lojban: I conclude)
+    su'a      -> PROPOSED     (Lojban: I generalize)
+    ba'a      -> PROPOSED     (Lojban: I expect)
+    ba'anai   -> OBSERVED     (Lojban: I remember), with provenance {basis: memory}
+    ba'acu'i  -> OBSERVED     (Lojban: I experience), self-scoped exactly as se'o
     se'o      -> OBSERVED     (Lojban: I know by internal experience), with
                  scope "speaker's own state only": x1 is filled with the
                  speaker, and the other places are the speaker's own and are
@@ -44,13 +59,13 @@ EVIDENTIAL -> STATUS of the claim, carried, never upgraded:
                  answered_by, or a checkable_ref that does not re-read ->
                  DEGRADED, naming it.            (Lojban: cultural knowledge)
   no evidential given -> the claim's status stays null.
-  The meanings of se'o, ja'o and ka'u are recalled, not checked against a
-  Lojban source here.
+  The glosses are those of the relayed reference; this build did not re-read
+  them. The status each one maps to is this tool's rule, not Lojban's.
 
 SOURCE: every claim names where it comes from, by one rule for all routes.
-    a written claim (any evidential but se'o and ka'u, or none)   source_id
+    a written claim (any evidential but se'o, ba'acu'i and ka'u, or none)   source_id
     an oral claim (ka'u)                          oral_record.answered_by
-    a self-report (se'o)                          the speaker, filled in
+    a self-report (se'o, ba'acu'i)                the speaker, filled in
   The one that applies is required; missing -> DEGRADED, naming it, with the
   same shape whichever route it is (kind "source").
 
@@ -85,20 +100,27 @@ from pathlib import Path
 from infer.ladder import record_sha
 from numcheck.check import Bad, check_point, to_interval
 
-VERSION = "wordslots branch4-4"
-RECORD_FIELDS = ("word", "slots", "reading", "magnitude", "evidential", "speaker",
+VERSION = "wordslots branch4-5"
+RECORD_FIELDS = ("word", "slots", "reading", "sense", "magnitude", "evidential", "speaker",
                  "oral_record", "source_id", "source_path", "table")
 FILLING_FIELDS = ("text", "value", "unit", "status", "is")
-SLOT_FIELDS = ("name", "role", "required", "status", "bounds", "ranges")
-WORD_FIELDS = ("status", "class", "shape", "slots", "magnitude_required_for")
+SLOT_FIELDS = ("name", "role", "required", "status", "bounds", "ranges",
+               "source_predicate", "senses")
+WORD_FIELDS = ("status", "class", "shape", "slots", "magnitude_required_for",
+               "senses", "sense_field", "lojban")
+SENSE_FIELDS = ("reading", "sense")
 STATUS = ("OBSERVED", "DERIVED", "PROPOSED")
 CLASSES = ("JUDGMENT", "COMPARATIVE", "EMOTIVE", "FEAR")
 READINGS = ("PHYSICAL", "SOCIAL")
 EVIDENTIAL = {"observed": "OBSERVED", "concluded": "DERIVED", "hearsay": "PROPOSED",
               "opinion": "PROPOSED", "defined": "OBSERVED",
-              "ja'o": "DERIVED", "se'o": "OBSERVED", "ka'u": None}
+              "ja'o": "DERIVED", "se'o": "OBSERVED", "ka'u": None,
+              "ba'acu'i": "OBSERVED", "ba'anai": "OBSERVED", "ba'a": "PROPOSED",
+              "su'a": "PROPOSED"}
+SELF_EVIDENTIALS = ("se'o", "ba'acu'i")          # the speaker's own state only
+MEMORY_PROVENANCE = {"basis": "memory", "event": "past, as remembered by the speaker"}
 SELF_WORDS = ("i", "me", "myself")
-WIDTHS = {"word": 20, "slot_text": 40, "reading": 8, "unit": 12, "evidential": 10,
+WIDTHS = {"word": 20, "slot_text": 40, "reading": 8, "sense": 12, "unit": 12, "evidential": 10,
           "speaker": 40, "source_id": 40, "source_path": 80, "range_name": 20,
           "answered_by": 40}
 MAGNITUDE_PIC = {"picture": "S9(7)V9(4)", "integer_digits": 7, "decimal_digits": 4}
@@ -170,6 +192,24 @@ def read_table(table):
         need = entry.get("magnitude_required_for") or []
         if not isinstance(need, list) or any(r not in READINGS for r in need):
             raise Void(f"place table: word {word!r}: magnitude_required_for lists readings")
+        senses = entry.get("senses")
+        field = entry.get("sense_field")
+        if (senses is None) != (field is None):
+            raise Void(f"place table: word {word!r} declares senses and sense_field together")
+        if senses is not None:
+            if field not in SENSE_FIELDS:
+                raise Void(f"place table: word {word!r}: sense_field is one of "
+                           + ", ".join(SENSE_FIELDS))
+            if not isinstance(senses, dict) or not senses or any(
+                    not isinstance(v, str) or not v.strip() for v in senses.values()):
+                raise Void(f"place table: word {word!r}: senses is {{sense: source predicate}}")
+            if field == "reading" and any(n not in READINGS for n in senses):
+                raise Void(f"place table: word {word!r}: a reading sense is one of "
+                           + ", ".join(READINGS))
+        if entry.get("lojban") not in (None, "VOID"):
+            raise Void(f"place table: word {word!r}: lojban is VOID or absent")
+        if entry.get("lojban") == "VOID" and entry.get("shape") is not None:
+            raise Void(f"place table: word {word!r}: lojban VOID and a shape together")
         seen = set()
         for s in entry["slots"]:
             if not isinstance(s, dict) or not isinstance(s.get("name"), str):
@@ -184,6 +224,17 @@ def read_table(table):
                 raise Void(f"place table: {word}.{s['name']} does not say required true / false")
             if s.get("status") not in STATUS:
                 raise Void(f"place table: {word}.{s['name']} has no status tag")
+            src = s.get("source_predicate")
+            if not isinstance(src, str) or not src.strip():
+                raise Void(f"place table: {word}.{s['name']} has no source_predicate")
+            if entry.get("lojban") == "VOID" and src != "physics_def":
+                raise Void(f"place table: {word}.{s['name']}: lojban is VOID for {word!r}, "
+                           "so its slots are physics_def")
+            if s.get("senses") is not None:
+                if not isinstance(s["senses"], list) or not s["senses"] \
+                        or any(n not in (senses or {}) for n in s["senses"]):
+                    raise Void(f"place table: {word}.{s['name']} names a sense the word "
+                               "does not declare")
     return words
 
 
@@ -331,6 +382,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
     rec = {"word": get("word"), "verdict": "VOID", "void_reason": None,
            "located_error": None, "status": None, "pass_equivalent": False,
            "word_class": None, "shape": None,
+           "lojban": None, "sense": None, "sense_field": None, "sense_predicate": None,
            "slots": None, "missing_required": [], "degraded": None, "usable": None,
            "ranges": [], "reading": get("reading"), "magnitude": get("magnitude"),
            "evidential": get("evidential"), "claim_status": None, "claim_provenance": None,
@@ -349,7 +401,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
         if not isinstance(word, str) or not word.strip():
             raise Void("no word")
         fits(word, "word", "word")
-        for f in ("speaker", "source_id", "source_path", "evidential", "reading"):
+        for f in ("speaker", "source_id", "source_path", "evidential", "reading", "sense"):
             if claim.get(f) is not None and not isinstance(claim[f], str):
                 raise Void(f"{f} is not text")
             fits(claim.get(f), f, f)
@@ -357,13 +409,22 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             raise Void(f"unknown word {word!r}: not in the place table")
         entry = words[word]
         rec.update(table_entry_status=entry["status"], word_class=entry.get("class"),
-                   shape=entry.get("shape"))
+                   shape=entry.get("shape"), lojban=entry.get("lojban"),
+                   sense_field=entry.get("sense_field"))
         ev = claim.get("evidential")
         if ev is not None and ev not in EVIDENTIAL:
             raise Void(f"unknown evidential {ev!r}; one of: " + ", ".join(EVIDENTIAL))
         reading = claim.get("reading")
         if reading is not None and reading not in READINGS:
             raise Void(f"reading {reading!r} is not one of " + ", ".join(READINGS))
+        senses, sense_field = entry.get("senses") or {}, entry.get("sense_field")
+        if claim.get("sense") is not None and sense_field != "sense":
+            raise Void(f"{word!r} has no sense slot" + (
+                f": its sense is given in {sense_field}" if sense_field else ""))
+        sense = claim.get(sense_field) if sense_field else None
+        if sense is not None and sense not in senses:
+            raise Void(f"sense {sense!r} is not one of " + ", ".join(senses))
+        rec.update(sense=sense, sense_predicate=senses.get(sense))
         magnitude = claim.get("magnitude")
         if magnitude is not None:
             if not isinstance(magnitude, dict) or magnitude.get("value") is None \
@@ -412,14 +473,14 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
                                            "declared_in": "place table" if kind == "slot"
                                            else "claim record"}})
         x1 = entry["slots"][0]["name"]
-        if ev == "se'o":
+        if ev in SELF_EVIDENTIALS:
             speaker = claim.get("speaker")
             given = filled.get(x1)
             text = (given.get("text") if isinstance(given, dict) else given) or ""
             rec["claim_status"] = "OBSERVED"
             rec["scope"] = "speaker's own state only"
             if _empty(speaker):
-                lack("speaker", "field", "se'o reports the speaker's own state and no "
+                lack("speaker", "field", f"{ev} reports the speaker's own state and no "
                                          "speaker is given")
             elif _empty(given):
                 filled = dict(filled, **{x1: speaker})          # auto-filled
@@ -428,7 +489,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             elif text.strip().lower() in SELF_WORDS or text.strip() == speaker.strip():
                 self_scope = True
             else:
-                lack(x1, "scope", f"se'o covers the speaker's own state only; {x1} is "
+                lack(x1, "scope", f"{ev} covers the speaker's own state only; {x1} is "
                                   f"{text.strip()!r}, not the speaker: an assessment of "
                                   "something external needs another evidential",
                      entry["slots"][0].get("role"))
@@ -448,9 +509,11 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
                                                answered_by=rec["oral_record"]["answered_by"])
         elif ev is not None:
             rec["claim_status"] = EVIDENTIAL[ev]              # carried as mapped, never upgraded
+            if ev == "ba'anai":
+                rec["claim_provenance"] = dict(MEMORY_PROVENANCE)
         if ev != "ka'u" and claim.get("oral_record") is not None:
             raise Void("oral_record is for the evidential ka'u only")
-        if ev == "se'o":
+        if ev in SELF_EVIDENTIALS:
             rec["source_kind"] = "self"                    # the source is the speaker
             if _empty(claim.get("source_id")) and not _empty(claim.get("speaker")):
                 rec["source_id"] = claim["speaker"]
@@ -467,13 +530,20 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             f = filled.get(s["name"])
             empty = _empty(f)
             state = "VOID" if empty else "FILLED"
-            if empty and s["required"]:
+            in_sense = None if s.get("senses") is None else \
+                None if sense is None else sense in s["senses"]
+            # a slot bound to senses is asked for only under one of them; with the
+            # sense not given, the sense itself is what is missing
+            asked = s["required"] and (s.get("senses") is None or in_sense is True)
+            if empty and asked:
                 if self_scope and s["name"] != x1:
                     state = "WAIVED"
                     waived.append(s["name"])
                 else:
                     lack(s["name"], "slot", "required slot empty", s.get("role"))
             rows.append({"name": s["name"], "role": s.get("role"), "required": s["required"],
+                         "source_predicate": s["source_predicate"],
+                         "senses": s.get("senses"), "in_sense": in_sense,
                          "slot_status": s["status"], "slot_state": state,
                          "filling": None if empty else f})
         if entry.get("class") == "EMOTIVE" and reading is None:
@@ -481,6 +551,11 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
                 waived.append("reading")
             else:
                 lack("reading", "field", "an EMOTIVE word needs its reading: PHYSICAL or SOCIAL")
+        if sense_field == "sense" and sense is None:
+            if self_scope:
+                waived.append("sense")
+            else:
+                lack("sense", "field", f"{word!r} needs its sense: " + " or ".join(senses))
         has_value = magnitude is not None or any(
             isinstance(filled.get(n), dict) and filled[n].get("value") is not None
             for n in declared)                       # a filling's value is a magnitude too

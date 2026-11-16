@@ -17,10 +17,14 @@ FULL = {"x1": "the bridge", "x2": "collapse under a 3 t load", "x3": "pedestrian
 
 
 def claim(word, slots, **kw):
-    """A claim with a source_id, unless the test passes source_id=None."""
+    """A claim with a source_id, unless the test passes source_id=None; a claim
+    of "safe" is in the PROTECTED sense, unless the test passes sense=None."""
     kw.setdefault("source_id", "a stated source")
-    if kw["source_id"] is None:
-        del kw["source_id"]
+    if word == "safe":
+        kw.setdefault("sense", "PROTECTED")
+    for k in ("source_id", "sense"):
+        if k in kw and kw[k] is None:
+            del kw[k]
     return check_claim({"word": word, "slots": slots, **kw}, WORDS)
 
 
@@ -37,7 +41,40 @@ class TestTable(unittest.TestCase):
                 self.assertEqual(s["status"], "PROPOSED")
         self.assertEqual([s["name"] for s in WORDS["safe"]["slots"]], ["x1", "x2", "x3"])
         self.assertEqual([s["role"] for s in WORDS["warm"]["slots"]],
-                         ["what is warm", "by standard"])
+                         ["what is warm", "by standard", "to whom",
+                          "in what actions or behaviour"])
+
+    def test_every_slot_carries_a_source_predicate(self):
+        ref = json.loads((ROOT / "REFERENCES" / "lojban_place_structures.json").read_text())
+        known = {p["gismu"] for p in ref["data"]["place_structures"] if p["gismu"]}
+        got = {w: [s["source_predicate"] for s in e["slots"]] for w, e in WORDS.items()}
+        for w, preds in got.items():
+            for g in preds:                               # a word of the reference, or physics_def
+                self.assertTrue(g == "physics_def" or g in known, (w, g))
+        self.assertEqual(got["warm"], ["glare", "glare", "xendo", "xendo"])
+        self.assertEqual(got["safe"], ["snura", "snura", "ckape"])
+        self.assertEqual(got["hostile"], ["le'onmo"] * 2)
+        self.assertEqual(got["better"], ["xagmau"] * 5)
+        self.assertEqual(got["appropriate"], ["mapti"] * 3)
+        self.assertEqual((got["more"], got["less"]), (["zmadu"] * 4, ["mleca"] * 4))
+        self.assertEqual(got["near"], ["jibni"] * 3)
+        r = claim("safe", FULL)                           # and it rides along in the record
+        self.assertEqual([x["source_predicate"] for x in r["slots"]], ["snura", "snura", "ckape"])
+
+    def test_efficient_keeps_lojban_void(self):
+        e = WORDS["efficient"]
+        self.assertEqual((e["lojban"], e["shape"]), ("VOID", None))
+        self.assertEqual({s["source_predicate"] for s in e["slots"]}, {"physics_def"})
+        r = claim("efficient", {"x1": "this pump", "x2": "water lifted", "x3": "fuel burned"})
+        self.assertEqual((r["verdict"], r["lojban"], r["shape"]), ("PASS", "VOID", None))
+        r = claim("efficient", {"x1": "this pump"})
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2", "x3"]))
+        for change in (lambda e: e.update(shape="zmadu"),             # VOID and a shape
+                       lambda e: e["slots"][0].update(source_predicate="zmadu"),
+                       lambda e: e.update(lojban="unknown")):
+            t = copy.deepcopy(TABLE)
+            change(t["words"]["efficient"])
+            self.assertIsNotNone(check_all([{"word": "efficient"}], t)["table_void"])
 
     def test_bad_tables_void_every_claim(self):
         def broken(change):
@@ -48,6 +85,11 @@ class TestTable(unittest.TestCase):
                        lambda e: e["slots"][0].pop("required"),
                        lambda e: e["slots"][0].pop("status"),
                        lambda e: e["slots"][0].update(colour="red"),
+                       lambda e: e["slots"][0].pop("source_predicate"),
+                       lambda e: e["slots"][0].update(source_predicate=""),
+                       lambda e: e["slots"][1].update(senses=["SAFE_ENOUGH"]),
+                       lambda e: e.pop("sense_field"),
+                       lambda e: e.update(sense_field="mood"),
                        lambda e: e["slots"].append(dict(e["slots"][0])),
                        lambda e: e.update(slots=[])):
             rep = broken(change)
@@ -95,9 +137,10 @@ class TestClaims(unittest.TestCase):
         self.assertEqual((r["evidential"], r["claim_status"]), ("hearsay", "PROPOSED"))
         self.assertNotEqual(r["claim_status"], r["status"])        # a PASS does not lift it
         self.assertEqual({e: claim("safe", FULL, evidential=e)["claim_status"]
-                          for e in EVIDENTIAL if e not in ("se'o", "ka'u")},
+                          for e in EVIDENTIAL if e not in ("se'o", "ka'u", "ba'acu'i")},
                          {"observed": "OBSERVED", "concluded": "DERIVED", "hearsay": "PROPOSED",
-                          "opinion": "PROPOSED", "defined": "OBSERVED", "ja'o": "DERIVED"})
+                          "opinion": "PROPOSED", "defined": "OBSERVED", "ja'o": "DERIVED",
+                          "ba'anai": "OBSERVED", "ba'a": "PROPOSED", "su'a": "PROPOSED"})
         r = claim("safe", FULL)                                    # none given: stays null
         self.assertEqual((r["verdict"], r["claim_status"]), ("PASS", None))
         r = claim("safe", {"x1": "the bridge"}, evidential="hearsay")
@@ -122,11 +165,12 @@ class TestClaims(unittest.TestCase):
                     {"word": "safe", "slots": dict(FULL, x2=7)}):
             self.assertEqual(check_claim(bad, WORDS)["verdict"], "VOID", bad)
         self.assertEqual(set(RECORD_FIELDS),
-                         {"word", "slots", "reading", "magnitude", "evidential", "speaker",
+                         {"word", "slots", "reading", "sense", "magnitude", "evidential", "speaker",
                           "oral_record", "source_id", "source_path", "table"})
         for bad in ({"reading": "WARMISH"}, {"evidential": "za'a'a"},
                     {"magnitude": {"value": "1", "weight": 2}}, {"oral_record": {}}):
-            r = check_claim({"word": "safe", "slots": FULL, "source_id": "s", **bad}, WORDS)
+            r = check_claim({"word": "safe", "slots": FULL, "sense": "PROTECTED",
+                             "source_id": "s", **bad}, WORDS)
             self.assertEqual(r["verdict"], "VOID", bad)          # a bad tag stays VOID
 
     def test_optional_slot_may_stay_void(self):
@@ -169,7 +213,8 @@ class TestV1(unittest.TestCase):
     def test_emotive_needs_its_reading(self):
         r = claim("warm", {"x1": "the welcome", "x2": "local custom"})
         self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["reading"]))
-        r = claim("warm", {"x1": "the welcome", "x2": "local custom"}, reading="SOCIAL")
+        social = {"x1": "the host", "x3": "the guests", "x4": "the welcome at the door"}
+        r = claim("warm", social, reading="SOCIAL")
         self.assertEqual(r["verdict"], "PASS")                    # SOCIAL needs no magnitude
         r = claim("safe", FULL)                                   # FEAR: no reading asked
         self.assertEqual(r["verdict"], "PASS")
@@ -182,8 +227,11 @@ class TestV1(unittest.TestCase):
                          ("OBSERVED", "speaker's own state only"))
         self.assertTrue(r["x1_auto_filled"])
         self.assertEqual(r["slots"][0]["filling"], "Ana")          # x1 = the speaker
-        self.assertEqual(r["slots"][1]["slot_state"], "WAIVED")
-        self.assertEqual(r["waived_by_self_report"], ["x2", "reading"])
+        self.assertEqual(r["slots"][1]["slot_state"], "VOID")
+        self.assertEqual(r["waived_by_self_report"], ["reading"])   # no reading: x2..x4 not asked
+        w = claim("warm", None, evidential="se'o", speaker="Ana", reading="PHYSICAL")
+        self.assertEqual(w["slots"][1]["slot_state"], "WAIVED")
+        self.assertEqual(w["waived_by_self_report"], ["x2", "magnitude"])
         for x1 in ("I", "me", "Ana"):                              # said outright: the same
             r = claim("warm", {"x1": x1}, evidential="se'o", speaker="Ana")
             self.assertEqual(r["verdict"], "PASS", x1)
@@ -197,7 +245,7 @@ class TestV1(unittest.TestCase):
         self.assertEqual((m[0]["name"], m[0]["kind"]), ("x1", "scope"))
         self.assertIn("speaker's own state only", m[0]["reason"])
         self.assertIn("'she', not the speaker", m[0]["reason"])
-        self.assertEqual(r["missing_required"], ["x1", "x2", "x3", "reading"])   # nothing waived
+        self.assertEqual(r["missing_required"], ["x1", "x2", "reading"])   # nothing waived
         self.assertEqual(r["waived_by_self_report"], [])
         self.assertEqual(r["usable"]["slots"], {"x1": "she"})      # kept all the same
         r = claim("safe", dict(FULL, x1="that location"), evidential="se'o", speaker="Ana")
@@ -206,7 +254,8 @@ class TestV1(unittest.TestCase):
     ORAL = {"shared": "y", "multi_gen": "y", "checkable": "y", "not_central": "y",
             "answered_by": "the carrier"}
     FOUR = ("shared", "multi_gen", "checkable", "not_central")
-    BETTER = {"x1": "the new route", "x2": "night drivers", "x3": "hours of rest kept"}
+    BETTER = {"x1": "the new route", "x2": "the old route", "x3": "night drivers",
+              "x4": "hours of rest kept"}
 
     def test_kau_passing_all_four_is_observed_with_provenance(self):
         r = claim("better", self.BETTER, evidential="ka'u", oral_record=self.ORAL)
@@ -217,7 +266,7 @@ class TestV1(unittest.TestCase):
         self.assertTrue(r["oral_record"]["all_met"])
         self.assertEqual(r["oral_record"]["checks"], {n: "y" for n in self.FOUR})
         self.assertIsNone(r["oral_record"]["checkable_ref"])       # none given: no change
-        self.assertEqual((r["word_class"], r["shape"]), ("JUDGMENT", "xamgu"))
+        self.assertEqual((r["word_class"], r["shape"]), ("JUDGMENT", "xagmau"))
         self.assertEqual(r["status"], "DERIVED")                   # the verdict's own tag
         # the provenance belongs to ka'u only
         self.assertIsNone(claim("better", self.BETTER, evidential="observed")["claim_provenance"])
@@ -393,7 +442,7 @@ class TestV1(unittest.TestCase):
             self.assertEqual((r["verdict"], r["status"], r["pass_equivalent"]),
                              ("DEGRADED", "DERIVED", False))
             self.assertEqual(len(r["degraded"]["missing"]), 1)
-            self.assertEqual(r["degraded"]["kept"], ["x1", "x2", "x3"])
+            self.assertEqual(r["degraded"]["kept"], ["x1", "x2", "x3", "x4"])
             self.assertEqual(r["usable"]["slots"], self.BETTER)
             self.assertEqual(r["located_error"]["slot"], r["missing_required"][0])
         mw, mo = written["degraded"]["missing"][0], oral["degraded"]["missing"][0]
@@ -405,25 +454,110 @@ class TestV1(unittest.TestCase):
         self.assertTrue(mo["reason"].startswith("no source: an oral claim"))
         self.assertEqual(sorted(written), sorted(oral))            # the records' keys too
 
-    def test_classes_and_shapes_in_table_v0(self):
+    def test_classes_and_shapes_in_table_v2(self):
         got = {w: (e.get("class"), e.get("shape")) for w, e in WORDS.items()}
         self.assertEqual(got["more"], ("COMPARATIVE", "zmadu"))
-        self.assertEqual(got["less"], ("COMPARATIVE", "zmadu"))
-        self.assertEqual(got["efficient"], ("COMPARATIVE", "zmadu"))
-        self.assertEqual(got["better"], ("JUDGMENT", "xamgu"))
-        self.assertEqual(got["appropriate"], ("JUDGMENT", "xamgu"))
+        self.assertEqual(got["less"], ("COMPARATIVE", "mleca"))
+        self.assertEqual(got["efficient"], ("COMPARATIVE", None))
+        self.assertEqual(got["better"], ("JUDGMENT", "xagmau"))
+        self.assertEqual(got["appropriate"], ("JUDGMENT", "mapti"))
+        self.assertEqual((got["hostile"][1], got["safe"][1], got["warm"][1]),
+                         ("le'onmo", "snura", "glare"))
         self.assertEqual((got["warm"][0], got["hostile"][0], got["safe"][0]),
                          ("EMOTIVE", "EMOTIVE", "FEAR"))
         self.assertIsNone(TABLE["holder"])
         self.assertEqual([s["name"] for s in WORDS["more"]["slots"]], ["x1", "x2", "x3", "x4"])
         r = claim("more", {"x1": "this pump"})
         self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2", "x3"]))
-        r = claim("efficient", {"x1": "this machine", "x2": "the old one",
-                                "x3": "litres per hour"})
+        r = claim("less", {"x1": "this machine", "x2": "the old one",
+                           "x3": "litres per hour"})
         self.assertEqual(r["verdict"], "PASS")                    # x4, by what amount, optional
+        r = claim("better", {"x1": "a", "x2": "b", "x3": "c"})    # xagmau: the standard is x4
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x4"]))
+        r = claim("appropriate", {"x1": "the tool", "x2": "the job", "x3": "torque range"})
+        self.assertEqual(r["verdict"], "PASS")
+        r = claim("hostile", {"x1": "the dog", "x2": "strangers"}, reading="SOCIAL")
+        self.assertEqual(r["verdict"], "PASS")                    # le'onmo: two places
+        r = claim("hostile", {"x1": "the dog", "x2": "strangers", "x3": "by bite count"},
+                  reading="SOCIAL")
+        self.assertIn("undeclared slot for 'hostile': x3", r["void_reason"])
         t = copy.deepcopy(TABLE)
         t["words"]["more"]["class"] = "VIBES"
         self.assertIsNotNone(check_all([{"word": "more"}], t)["table_void"])
+
+    def test_safe_needs_its_sense(self):
+        r = claim("safe", FULL, sense=None)
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["sense"]))
+        self.assertIn("PROTECTED or NOT_PERILOUS", r["degraded"]["missing"][0]["reason"])
+        self.assertEqual(r["usable"]["slots"], FULL)               # what is filled is kept
+        # with no sense, the sense-bound slot is not asked for; the sense is
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense=None)
+        self.assertEqual(r["missing_required"], ["sense"])
+        r = claim("safe", FULL, sense="PROTECTED")                 # snura: from threat x2
+        self.assertEqual((r["verdict"], r["sense"], r["sense_predicate"]),
+                         ("PASS", "PROTECTED", "snura"))
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="PROTECTED")
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2"]))
+        # NOT_PERILOUS (ckape): no threat place; for whom is asked in both senses
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="NOT_PERILOUS")
+        self.assertEqual((r["verdict"], r["sense_predicate"]), ("PASS", "ckape"))
+        self.assertEqual((r["slots"][1]["slot_state"], r["slots"][1]["in_sense"]),
+                         ("VOID", False))                          # kept as a void slot
+        r = claim("safe", {"x1": "the bridge"}, sense="NOT_PERILOUS")
+        self.assertEqual(r["missing_required"], ["x3"])
+        r = claim("safe", FULL, sense="SAFE_ENOUGH")               # a bad tag
+        self.assertEqual(r["verdict"], "VOID")
+        self.assertIn("sense 'SAFE_ENOUGH' is not one of PROTECTED, NOT_PERILOUS",
+                      r["void_reason"])
+        r = claim("safe", FULL, sense="P" * 13)                    # X(12)
+        self.assertIn("would truncate", r["void_reason"])
+        # a word with no sense slot refuses one; warm's sense is its reading
+        r = claim("near", {"x1": "a", "x2": "b"}, sense="PROTECTED")
+        self.assertIn("'near' has no sense slot", r["void_reason"])
+        r = claim("warm", {"x1": "a"}, sense="PHYSICAL")
+        self.assertIn("its sense is given in reading", r["void_reason"])
+
+    def test_warm_sense_is_the_existing_reading(self):
+        self.assertEqual((WORDS["warm"]["sense_field"], WORDS["warm"]["senses"]),
+                         ("reading", {"PHYSICAL": "glare", "SOCIAL": "xendo"}))
+        r = warm("295")
+        self.assertEqual((r["sense"], r["sense_predicate"]), ("PHYSICAL", "glare"))
+        self.assertEqual([x["in_sense"] for x in r["slots"]], [None, True, False, False])
+        r = claim("warm", {"x1": "the host"}, reading="SOCIAL")    # xendo: to whom, in what
+        self.assertEqual((r["verdict"], r["missing_required"], r["sense_predicate"]),
+                         ("DEGRADED", ["x3", "x4"], "xendo"))
+        r = claim("warm", {"x1": "the room"}, reading="PHYSICAL", magnitude={"value": "295",
+                                                                             "unit": "K"})
+        self.assertEqual(r["missing_required"], ["x2"])            # glare: by standard
+
+    def test_evidentials_baa_and_sua(self):
+        for ev, status in (("ba'a", "PROPOSED"), ("su'a", "PROPOSED"), ("ba'anai", "OBSERVED")):
+            r = claim("safe", FULL, evidential=ev)
+            self.assertEqual((r["verdict"], r["claim_status"], r["source_kind"]),
+                             ("PASS", status, "written"), ev)
+            r = claim("safe", FULL, evidential=ev, source_id=None)  # a written route
+            self.assertEqual(r["missing_required"], ["source_id"], ev)
+        r = claim("safe", FULL, evidential="ba'anai")
+        self.assertEqual(r["claim_provenance"]["basis"], "memory")
+        self.assertIsNone(claim("safe", FULL, evidential="ba'a")["claim_provenance"])
+        self.assertIsNone(claim("safe", FULL, evidential="su'a")["claim_provenance"])
+        # ba'acu'i is self-scoped exactly as se'o
+        a = claim("warm", None, evidential="ba'acu'i", speaker="Ana", source_id=None)
+        b = claim("warm", None, evidential="se'o", speaker="Ana", source_id=None)
+        self.assertEqual((a["verdict"], a["claim_status"], a["scope"], a["source_kind"]),
+                         ("PASS", "OBSERVED", "speaker's own state only", "self"))
+        skip = ("evidential",)
+        self.assertEqual({k: v for k, v in a.items() if k not in skip},
+                         {k: v for k, v in b.items() if k not in skip})
+        r = claim("hostile", {"x1": "she"}, evidential="ba'acu'i", speaker="Ana")
+        self.assertEqual(r["verdict"], "DEGRADED")
+        self.assertIn("ba'acu'i covers the speaker's own state only", 
+                      r["degraded"]["missing"][0]["reason"])
+        r = claim("safe", None, evidential="ba'acu'i", speaker="Ana", sense=None)
+        self.assertEqual((r["verdict"], r["waived_by_self_report"]),
+                         ("PASS", ["x3", "sense"]))
+        r = claim("safe", FULL, evidential="ba'acu'i", oral_record=self.ORAL)
+        self.assertEqual(r["verdict"], "VOID")                     # oral_record is ka'u's
 
     def test_fixed_width_guard(self):
         ok40, long41 = "s" * 40, "s" * 41
@@ -490,9 +624,14 @@ class TestRanges(unittest.TestCase):
         self.assertEqual(warm("295", unit=None)["verdict"], "VOID")
 
     def test_unchecked_is_not_a_pass_of_the_bound(self):
-        r = claim("warm", {"x1": "the room", "x2": {"text": "room standard", "is": "room"}},
-                  reading="SOCIAL")
+        r = claim("near", {"x1": "the room", "x2": "the stairs", "x3": "a few steps"})
         self.assertEqual(r["verdict"], "PASS")                       # the slots are filled
+        self.assertEqual(r["ranges"][0]["state"], "UNCHECKED")
+        r = claim("warm", {"x1": "the room", "x2": {"text": "room standard", "is": "room"},
+                           "x3": "the guests", "x4": "the welcome"}, reading="SOCIAL")
+        self.assertEqual(r["verdict"], "PASS")       # x2 is out of the SOCIAL sense, and kept
+        self.assertEqual((r["slots"][1]["slot_state"], r["slots"][1]["in_sense"]),
+                         ("FILLED", False))
         self.assertEqual(r["ranges"][0]["state"], "UNCHECKED")       # the bound was not checked
         self.assertIsNone(r["ranges"][0]["numcheck"])
         r = claim("warm", {"x1": "the room", "x2": {"text": "std", "value": "295", "unit": "K",
@@ -515,20 +654,22 @@ class TestCli(unittest.TestCase):
         r = self.cli("check", "claims.json", "--json")
         self.assertEqual(r.returncode, 1)
         self.assertEqual(json.loads(r.stdout)["counts"],
-                         {"PASS": 4, "DEGRADED": 4, "FAIL": 1, "UNDECIDED": 0, "VOID": 2})
+                         {"PASS": 5, "DEGRADED": 5, "FAIL": 1, "UNDECIDED": 0, "VOID": 2})
         self.assertEqual(self.cli().returncode, 2)
         self.assertEqual(self.cli("check", "nope.json").returncode, 2)
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / "c.json"
-            ok = {"word": "safe", "slots": FULL, "source_id": "report 12"}
+            ok = {"word": "safe", "slots": FULL, "sense": "PROTECTED",
+                  "source_id": "report 12"}
             f.write_text(json.dumps([ok]))
             self.assertEqual(self.cli("check", str(f)).returncode, 0)
-            f.write_text(json.dumps([{"word": "safe", "slots": FULL}]))       # no source
+            f.write_text(json.dumps([{"word": "safe", "slots": FULL,
+                                      "sense": "PROTECTED"}]))               # no source
             r = self.cli("check", str(f))
             self.assertEqual(r.returncode, 3)
             self.assertIn("missing: source_id (no source: a written claim", r.stdout)
             f.write_text(json.dumps([ok, {"word": "safe", "slots": {"x1": "a"},
-                                          "source_id": "report 12"}]))
+                                          "sense": "PROTECTED", "source_id": "report 12"}]))
             r = self.cli("check", str(f))
             self.assertEqual(r.returncode, 3)
             self.assertIn("missing: x2 (required slot empty); x3 (required slot empty)",
@@ -536,7 +677,8 @@ class TestCli(unittest.TestCase):
             self.assertIn("DEGRADED", r.stdout)
             t = Path(d) / "t.json"
             t.write_text(json.dumps({"words": {"tall": {"status": "OBSERVED", "slots": [
-                {"name": "x1", "role": "who", "required": True, "status": "OBSERVED"}]}}}))
+                {"name": "x1", "role": "who", "required": True, "status": "OBSERVED",
+                 "source_predicate": "physics_def"}]}}}))
             f.write_text(json.dumps([{"word": "tall", "slots": {"x1": "the tower"},
                                       "source_id": "survey"}]))
             r = self.cli("check", str(f), "--table", str(t), "--json")

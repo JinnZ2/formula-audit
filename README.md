@@ -8,7 +8,7 @@ only. Branch 2b (data points and intersections) is implemented and passes its
 own tests within tested scope; only its interval tier is rigorous. The seam
 from 2b's proposals to the 2a kernel is implemented, with no proof search and a
 hand-written axiom file audited by one reader (second reader: VOID). Branch 4
-(word slots, v1 with a DEGRADED verdict) and branch 5 (inference ladder) are
+(word slots, v2 with a DEGRADED verdict) and branch 5 (inference ladder) are
 implemented and pass their own tests within tested scope; the ladder's caps are PROPOSED defaults and its worked
 case uses constructed numbers. Branch 4's
 shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
@@ -555,24 +555,37 @@ tools          four, chosen to touch branches 1, 2b and 4; branch 2a and branch 
 ## Branch 4: word slots
 
 A word claims nothing until its places are filled: "safe" is safe from what,
-for whom. v1.
+for whom. v2: the place table is realigned to the relayed Lojban reference.
 
 ```text
-places.json   word -> ordered slots (name, role, required, status tag, optional bounds),
-              class (JUDGMENT / COMPARATIVE / EMOTIVE / FEAR, or null), shape
-              warm: x1 what is warm, x2 by standard                      EMOTIVE  (glare)
-              safe: x1 what is safe, x2 from threat, x3 for whom         FEAR     (snura)
-              more / less / efficient: x1, x2 than what, x3 in what      COMPARATIVE (zmadu)
-                   property, x4 by what amount (optional)
-              better / appropriate: x1, x2 for whom, x3 by standard      JUDGMENT (xamgu)
-claims.json   fixed record with declared widths: word, slots, reading, magnitude,
+places.json   word -> ordered slots (name, role, required, status tag, source_predicate,
+              optional bounds, optional senses), class (JUDGMENT / COMPARATIVE /
+              EMOTIVE / FEAR, or null), shape, optional senses + sense_field
+              word         slots (source_predicate)                          class
+              warm         x1 what is warm (glare)                           EMOTIVE
+                             PHYSICAL: x2 by standard (glare)
+                             SOCIAL:   x3 to whom, x4 in what behaviour (xendo)
+              safe         x1 what is safe (snura), x3 for whom (ckape)      FEAR
+                             PROTECTED:    x2 from threat (snura)
+                             NOT_PERILOUS: no further place
+              hostile      x1, x2 toward whom (le'onmo)                      EMOTIVE
+              more         x1, x2 than what, x3 in what property,            COMPARATIVE
+                           x4 by what amount, optional (zmadu)
+              less         the same four places (mleca)                      COMPARATIVE
+              efficient    x1, x2 useful output, x3 input supplied           COMPARATIVE
+                           (physics_def); lojban: VOID
+              better       x1, x2 than what, x3 for whom, x4 by what         JUDGMENT
+                           standard, x5 by what amount, optional (xagmau)
+              appropriate  x1, x2 to or with what, x3 in what aspect (mapti) JUDGMENT
+              near         x1, x2 to what, x3 at distance, optional (jibni)  null
+claims.json   fixed record with declared widths: word, slots, reading, sense, magnitude,
               evidential, speaker, oral_record, source_id, source_path, table
                       |
    unknown word / undeclared field or slot / bad tag     ---> VOID
    a value longer than its width, a number past S9(7)V9(4) ---> VOID ("would truncate")
                       |
-   something required is missing (a slot, the reading of an EMOTIVE word, a magnitude,
-   the source)
+   something required is missing (a slot, the reading of an EMOTIVE word, the sense
+   of "safe", a magnitude, the source)
         ---> DEGRADED: what is filled is kept and usable; each missing item listed
              with name, reason, provenance. Not a PASS; pass_equivalent: false.
                       |
@@ -592,6 +605,9 @@ evidential    how the claimant knows, mapped to the claim's own status and carri
               observed -> OBSERVED   concluded -> DERIVED   hearsay, opinion -> PROPOSED
               defined -> OBSERVED (given input, like an axiom in branch 2a)
               ja'o -> DERIVED
+              su'a -> PROPOSED (I generalize)      ba'a -> PROPOSED (I expect)
+              ba'anai -> OBSERVED (I remember), with provenance {basis: memory}
+              ba'acu'i -> OBSERVED (I experience), self-scoped exactly as se'o
               se'o -> OBSERVED, scope "speaker's own state only": x1 is filled with the
                       speaker and the other places are waived. se'o on anything
                       external -> DEGRADED.
@@ -606,9 +622,9 @@ evidential    how the claimant knows, mapped to the claim's own status and carri
                       compared) and a mismatch -> DEGRADED.
               none given -> null. A PASS never upgrades it.
 source        one rule for every route: a claim names where it comes from.
-                written (any evidential but se'o and ka'u, or none)   source_id
+                written (any evidential but se'o, ba'acu'i and ka'u, or none)   source_id
                 oral (ka'u)                                oral_record.answered_by
-                self-report (se'o)                         the speaker, filled in
+                self-report (se'o, ba'acu'i)               the speaker, filled in
               the one that applies is required; missing -> DEGRADED, naming it, with
               the same record shape on either route (kind "source")
 status        the verdict is DERIVED (VOID: none). claim_status is the claim's own.
@@ -616,7 +632,14 @@ status        the verdict is DERIVED (VOID: none). claim_status is the claim's o
               holder of the word confirms it; the checker never changes a tag.
 emotive       an EMOTIVE word needs its reading, PHYSICAL or SOCIAL; a PHYSICAL
               reading of "warm" needs a magnitude with its unit
-widths        word X(20), slot text X(40), reading X(8), unit X(12), evidential X(10),
+sense         a word may declare senses, each with the predicate it comes from, and
+              the claim field that picks one: "reading" for warm (the field it
+              already had), "sense" for safe (PROTECTED / NOT_PERILOUS). A slot
+              bound to senses is asked for only under one of them. safe with no
+              sense -> DEGRADED, naming sense; a sense not declared -> VOID.
+source_       every slot names the gismu or lujvo its place comes from, or
+predicate     "physics_def". A slot without one voids the table.
+widths        word X(20), slot text X(40), reading X(8), sense X(12), unit X(12), evidential X(10),
               speaker X(40), source_id X(40), source_path X(80); magnitude S9(7)V9(4).
               Nothing is ever cut to fit.
 ranges        "bounds" {lo, hi, unit} on a slot, and named "ranges" (a name standing
@@ -637,21 +660,24 @@ table           the shipped places.json is an example written here, all PROPOSED
 Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (received
                 2026-11-17), quotes 30 place structures from jbovlaste and 11 evidentials
                 from the CLL, each with its URL. This build could not reach lojban.org
-                and re-read none of it. It bears out the five recalled shapes (glare,
-                snura, jibni, zmadu, xamgu: worded differently, same places) and the
-                meanings of se'o, ja'o and ka'u.
-table vs        the place table was NOT changed to match the reference; it is PROPOSED
-reference       and a word's slots are the holder's to set. Where they differ:
-                  safe         table has x3 "for whom"; snura has two places
-                  hostile      table has x3 "by what standard"; le'onmo has two places
-                  better       table is xamgu-shaped (3 slots); xagmau has five places,
-                               among them "than what" and "by amount"
-                  appropriate  table is xamgu-shaped; the reference maps it to mapti
-                               (fits x2 in aspect x3)
-                  efficient    table is zmadu-shaped; the reference finds no Lojban word
-                  warm         table is glare-shaped (temperature); the social sense
-                               maps to xendo (kind to x2 in behaviour x3)
-                tests/test_lojban_reference.py records these differences.
+                and re-read none of it; the file was typed in from a paste and has not
+                been byte-compared with the original (re_read_in_this_build: false).
+table vs        the place table is realigned to the reference, and is still PROPOSED:
+reference       a word's slots are the holder's to set. Union rule: a slot the table
+                already had is kept when a predicate of the reference carries that
+                place, and dropped when none does.
+                  realigned    hostile -> le'onmo (2 places; "by what standard" dropped)
+                               better -> xagmau (5 places); appropriate -> mapti
+                               less -> mleca; warm SOCIAL -> xendo's places added
+                  kept         safe "for whom": snura has two places; ckape carries it
+                               efficient: no Lojban word in the reference; lojban VOID
+                               stays in the entry, slots are physics_def
+                  not taken    ckape's "under conditions x3" is not a slot of safe
+                tests/test_lojban_reference.py records both lists.
+choices made    not given by the reference, made in this build and PROPOSED:
+here            which predicate stands behind each sense of safe (PROTECTED = snura,
+                NOT_PERILOUS = ckape); efficient's three physics_def slots (useful
+                output over input supplied); the status each new evidential maps to.
 se'o            the CLL calls it knowledge by "internal experience not directly available
                 to others, such as a dream, vision, or personal revelation". Using it for
                 any report of one's own feeling ("I feel warm") is this repository's

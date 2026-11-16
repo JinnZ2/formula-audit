@@ -7,7 +7,8 @@
     "x1": "the bridge"
    },
    "evidential": "opinion",
-   "source_id": "example"
+   "source_id": "example",
+   "sense": "PROTECTED"
   },
   {
    "word": "safe",
@@ -17,7 +18,8 @@
     "x3": "pedestrians"
    },
    "evidential": "hearsay",
-   "source_id": "a neighbour"
+   "source_id": "a neighbour",
+   "sense": "PROTECTED"
   },
   {
    "word": "warm",
@@ -101,8 +103,9 @@
    "word": "better",
    "slots": {
     "x1": "the new route",
-    "x2": "night drivers",
-    "x3": "hours of rest kept"
+    "x2": "the old route",
+    "x3": "night drivers",
+    "x4": "hours of rest kept"
    },
    "evidential": "ka'u",
    "oral_record": {
@@ -113,6 +116,24 @@
     "answered_by": "the carrier"
    },
    "source_id": "told by the carrier"
+  },
+  {
+   "word": "safe",
+   "slots": {
+    "x1": "the footpath",
+    "x3": "children"
+   },
+   "sense": "NOT_PERILOUS",
+   "evidential": "ba'anai",
+   "source_id": "walked it last spring"
+  },
+  {
+   "word": "efficient",
+   "slots": {
+    "x1": "this pump"
+   },
+   "evidential": "su'a",
+   "source_id": "three pumps seen"
   }
  ]
 }

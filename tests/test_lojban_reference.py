@@ -54,24 +54,58 @@ class TestReference(unittest.TestCase):
                          {"ba'a", "su'a"})
 
     def test_where_the_place_table_differs_from_the_reference(self):
-        # recorded, not repaired: the table is PROPOSED and changing a word's slots is
-        # the holder's decision
+        # the table was realigned to the reference; what still differs stays here as a
+        # record. The table is PROPOSED either way: the holder has confirmed nothing.
         slots = {w: len(e["slots"]) for w, e in TABLE.items()}
+        # KEPT by the union rule: safe keeps "for whom", which snura does not have
         self.assertEqual((slots["safe"], BY["safe"]["gismu"]), (3, "snura"))       # snura: 2
         self.assertIn("from threat x2", BY["safe"]["place_structure_verbatim"])
-        self.assertEqual((slots["hostile"], BY["hostile"]["gismu"]), (3, "le'onmo"))  # 2 places
-        self.assertEqual((TABLE["better"]["shape"], BY["better"]["gismu"]), ("xamgu", "xagmau"))
-        self.assertIn("better than z2", BY["better"]["place_structure_verbatim"])
-        self.assertEqual((TABLE["appropriate"]["shape"], BY["appropriate"]["gismu"]),
-                         ("xamgu", "mapti"))
-        self.assertEqual((TABLE["efficient"]["shape"], BY["efficient"]["gismu"]),
-                         ("zmadu", None))                                          # no valsi
+        self.assertEqual(TABLE["safe"]["slots"][2]["role"], "for whom")
+        self.assertEqual(TABLE["safe"]["slots"][2]["source_predicate"], "ckape")
+        self.assertIn("harmful to x2", BY["dangerous"]["place_structure_verbatim"])
+        # KEPT: efficient has no Lojban word in the reference, and the table says so
+        self.assertEqual((TABLE["efficient"]["shape"], BY["efficient"]["gismu"]), (None, None))
+        self.assertEqual((TABLE["efficient"]["lojban"], BY["efficient"]["structure_status"]),
+                         ("VOID", "VOID"))
+        # KEPT: warm's shape is still glare; the reference's xendo is its SOCIAL sense
         self.assertEqual((TABLE["warm"]["shape"], BY["warm"]["gismu"]), ("glare", "xendo"))
-        # where they agree
-        for w, g in (("more", "zmadu"), ("less", "mleca"), ("near", "jibni")):
-            self.assertEqual(BY[w]["gismu"], g)
-        self.assertEqual((slots["more"], slots["less"], slots["near"]), (4, 4, 3))
+        self.assertEqual(TABLE["warm"]["senses"], {"PHYSICAL": "glare", "SOCIAL": "xendo"})
 
+    def test_where_the_place_table_now_agrees_with_the_reference(self):
+        slots = {w: len(e["slots"]) for w, e in TABLE.items()}
+        self.assertEqual((slots["hostile"], TABLE["hostile"]["shape"]), (2, BY["hostile"]["gismu"]))
+        self.assertEqual(TABLE["better"]["shape"], BY["better"]["gismu"])          # xagmau
+        self.assertEqual([s["role"] for s in TABLE["better"]["slots"]],
+                         ["what is better", "than what", "for whom", "by what standard",
+                          "by what amount"])
+        self.assertIn("better than z2 for xa2 by standard xa3, by amount z4",
+                      BY["better"]["place_structure_verbatim"])
+        self.assertEqual((TABLE["appropriate"]["shape"], slots["appropriate"]),
+                         (BY["appropriate"]["gismu"], 3))                          # mapti
+        for w, g in (("more", "zmadu"), ("less", "mleca"), ("near", "jibni")):
+            self.assertEqual((BY[w]["gismu"], TABLE[w]["shape"]), (g, g))
+        self.assertEqual((slots["more"], slots["less"], slots["near"]), (4, 4, 3))
+        self.assertEqual(slots["warm"], 4)            # glare's 2 places + xendo's x2, x3
+
+    def test_every_source_predicate_is_in_the_reference_or_physics_def(self):
+        known = {p["gismu"] for p in DATA["place_structures"]
+                 if p["structure_status"] == "OBSERVED"}
+        for w, e in TABLE.items():
+            for s in e["slots"]:
+                self.assertTrue(s["source_predicate"] in known
+                                or s["source_predicate"] == "physics_def", (w, s["name"]))
+            for g in (e.get("senses") or {}).values():
+                self.assertIn(g, known, w)
+
+    def test_new_evidentials_follow_the_reference_scale(self):
+        from wordslots.check import EVIDENTIAL, SELF_EVIDENTIALS
+        baa = next(e for e in DATA["evidentials"] if e["gismu"] == "ba'a")
+        for form in ("ba'acu'i", "ba'anai"):                       # the scale is quoted there
+            self.assertIn(form, baa["place_structure_verbatim"])
+        self.assertEqual({k: EVIDENTIAL[k] for k in ("ba'a", "ba'acu'i", "ba'anai", "su'a")},
+                         {"ba'a": "PROPOSED", "ba'acu'i": "OBSERVED", "ba'anai": "OBSERVED",
+                          "su'a": "PROPOSED"})
+        self.assertEqual(SELF_EVIDENTIALS, ("se'o", "ba'acu'i"))
 
 if __name__ == "__main__":
     unittest.main()

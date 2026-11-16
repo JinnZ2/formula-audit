@@ -1,21 +1,36 @@
 {
- "note": "place table v1: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. The Lojban shapes named in 'shape' were recalled when the table was written. A relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17) now quotes the source wording; the table has NOT been changed to match it, and differs for safe, hostile, better, appropriate, efficient and the social reading of warm. See the README.",
+ "note": "place table v2: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. Realigned to the relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17; relayed, not re-read by this build). Each slot names the predicate its place comes from in source_predicate: a gismu or lujvo of the reference, or physics_def where the reference has no Lojban word. Union rule: a slot the table already had is kept when a predicate of the reference carries that place (safe 'for whom', from ckape); a slot no predicate of the reference carries is dropped (the standard of hostile and of appropriate). efficient has no Lojban word in the reference: lojban VOID is kept in the entry and its slots are physics_def (useful output over input supplied), typed in for this build. See the README.",
  "holder": null,
  "words": {
   "warm": {
    "status": "PROPOSED",
+   "class": "EMOTIVE",
+   "shape": "glare",
+   "sense_field": "reading",
+   "senses": {
+    "PHYSICAL": "glare",
+    "SOCIAL": "xendo"
+   },
+   "magnitude_required_for": [
+    "PHYSICAL"
+   ],
    "slots": [
     {
      "name": "x1",
      "role": "what is warm",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "glare"
     },
     {
      "name": "x2",
      "role": "by standard",
      "required": true,
      "status": "PROPOSED",
+     "source_predicate": "glare",
+     "senses": [
+      "PHYSICAL"
+     ],
      "ranges": {
       "room": {
        "lo": "291",
@@ -28,91 +43,116 @@
        "unit": "K"
       }
      }
+    },
+    {
+     "name": "x3",
+     "role": "to whom",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "xendo",
+     "senses": [
+      "SOCIAL"
+     ]
+    },
+    {
+     "name": "x4",
+     "role": "in what actions or behaviour",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "xendo",
+     "senses": [
+      "SOCIAL"
+     ]
     }
-   ],
-   "class": "EMOTIVE",
-   "shape": "glare",
-   "magnitude_required_for": [
-    "PHYSICAL"
    ]
   },
   "safe": {
    "status": "PROPOSED",
+   "class": "FEAR",
+   "shape": "snura",
+   "sense_field": "sense",
+   "senses": {
+    "PROTECTED": "snura",
+    "NOT_PERILOUS": "ckape"
+   },
    "slots": [
     {
      "name": "x1",
      "role": "what is safe",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "snura"
     },
     {
      "name": "x2",
      "role": "from threat",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "snura",
+     "senses": [
+      "PROTECTED"
+     ]
     },
     {
      "name": "x3",
      "role": "for whom",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "ckape"
     }
-   ],
-   "class": "FEAR",
-   "shape": "snura"
+   ]
   },
   "near": {
    "status": "PROPOSED",
+   "class": null,
+   "shape": "jibni",
    "slots": [
     {
      "name": "x1",
      "role": "what is near",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "jibni"
     },
     {
      "name": "x2",
      "role": "to what",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "jibni"
     },
     {
      "name": "x3",
      "role": "at distance",
      "required": false,
      "status": "PROPOSED",
+     "source_predicate": "jibni",
      "bounds": {
       "lo": "0",
       "hi": "100",
       "unit": "m"
      }
     }
-   ],
-   "class": null,
-   "shape": "jibni"
+   ]
   },
   "hostile": {
    "status": "PROPOSED",
    "class": "EMOTIVE",
-   "shape": null,
+   "shape": "le'onmo",
    "slots": [
     {
      "name": "x1",
      "role": "who or what is hostile",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "le'onmo"
     },
     {
      "name": "x2",
      "role": "toward whom",
      "required": true,
-     "status": "PROPOSED"
-    },
-    {
-     "name": "x3",
-     "role": "by what standard",
-     "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "le'onmo"
     }
    ]
   },
@@ -125,137 +165,163 @@
      "name": "x1",
      "role": "what is more",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "zmadu"
     },
     {
      "name": "x2",
      "role": "than what",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "zmadu"
     },
     {
      "name": "x3",
      "role": "in what property or quantity",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "zmadu"
     },
     {
      "name": "x4",
      "role": "by what amount",
      "required": false,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "zmadu"
     }
    ]
   },
   "less": {
    "status": "PROPOSED",
    "class": "COMPARATIVE",
-   "shape": "zmadu",
+   "shape": "mleca",
    "slots": [
     {
      "name": "x1",
      "role": "what is less",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mleca"
     },
     {
      "name": "x2",
      "role": "than what",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mleca"
     },
     {
      "name": "x3",
      "role": "in what property or quantity",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mleca"
     },
     {
      "name": "x4",
      "role": "by what amount",
      "required": false,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mleca"
     }
    ]
   },
   "efficient": {
    "status": "PROPOSED",
    "class": "COMPARATIVE",
-   "shape": "zmadu",
+   "shape": null,
+   "lojban": "VOID",
    "slots": [
     {
      "name": "x1",
      "role": "what is efficient",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "physics_def"
     },
     {
      "name": "x2",
-     "role": "than what",
+     "role": "useful output",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "physics_def"
     },
     {
      "name": "x3",
-     "role": "in what property or quantity",
+     "role": "input supplied",
      "required": true,
-     "status": "PROPOSED"
-    },
-    {
-     "name": "x4",
-     "role": "by what amount",
-     "required": false,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "physics_def"
     }
    ]
   },
   "better": {
    "status": "PROPOSED",
    "class": "JUDGMENT",
-   "shape": "xamgu",
+   "shape": "xagmau",
    "slots": [
     {
      "name": "x1",
      "role": "what is better",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "xagmau"
     },
     {
      "name": "x2",
-     "role": "for whom",
+     "role": "than what",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "xagmau"
     },
     {
      "name": "x3",
+     "role": "for whom",
+     "required": true,
+     "status": "PROPOSED",
+     "source_predicate": "xagmau"
+    },
+    {
+     "name": "x4",
      "role": "by what standard",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "xagmau"
+    },
+    {
+     "name": "x5",
+     "role": "by what amount",
+     "required": false,
+     "status": "PROPOSED",
+     "source_predicate": "xagmau"
     }
    ]
   },
   "appropriate": {
    "status": "PROPOSED",
    "class": "JUDGMENT",
-   "shape": "xamgu",
+   "shape": "mapti",
    "slots": [
     {
      "name": "x1",
      "role": "what is appropriate",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mapti"
     },
     {
      "name": "x2",
-     "role": "for whom",
+     "role": "to or with what",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mapti"
     },
     {
      "name": "x3",
-     "role": "by what standard",
+     "role": "in what property or aspect",
      "required": true,
-     "status": "PROPOSED"
+     "status": "PROPOSED",
+     "source_predicate": "mapti"
     }
    ]
   }
