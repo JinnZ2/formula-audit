@@ -139,19 +139,21 @@ phone           no phone timing was taken; see the run notes in the commit that
 checks.json --> branch 1 on the formula ---- not PASS ----> VOID (with branch 1's reason)
                       | PASS
                       v
-      float, Decimal(prec)  = TRIAGE: predict the verdict, or "too close to call";
-                              logged beside the verdict, never used as it
+      float, Decimal(prec)  = TRIAGE: a predicted_verdict each, or "too close to call"
                       v
-      Fraction intervals    = THE VERDICT (rigorous; sqrt exp ln sin cos as outward
-                              enclosures, precision doubling to max_precision)
+      Fraction intervals    = CONFIRMS: every HOLDS / FAILS is decided here (rigorous;
+                              sqrt exp ln sin cos as outward enclosures, precision
+                              doubling to max_precision). Predicted is recorded beside
+                              confirmed; a mismatch is listed and counted.
                       |  straddles, and an input is an interval?
                       v
-      bisect the inputs to the depth limit: all pieces HOLD -> HOLDS,
-      all FAIL -> FAILS, else UNDECIDED (pieces counted; "mixed" = holds for some
-      of the given values and fails for others)
+      bisect the inputs, widest first, to the depth limit:
+        every piece HOLDS -> HOLDS
+        a piece where it fails at every point -> FAILS, that piece located
+        else -> UNDECIDED
 
-        HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside
-        UNDECIDED  straddles the edge after all of the above
+        HOLDS  lhs - rhs inside [-t, t]      FAILS  wholly outside (everywhere, or on
+        UNDECIDED  straddles after the above        a located piece of interval inputs)
         VOID  no value on these inputs (division by an interval containing 0, ...)
 ```
 
@@ -165,11 +167,11 @@ values        a number or an interval [lo, hi], with a unit and its own status t
               (OBSERVED / DERIVED / PROPOSED, or null: never filled in). Numbers
               are read exactly as written: 0.1 is one tenth.
 tolerance     t >= 0, a plain number in the units of the formula's two sides
-tiers         the interval tier decides. The record lists every tier with its role
-              (triage / decides), what triage predicted, and any triage prediction
-              that disagrees with the verdict.
---fast        (or "fast": true on a check) takes a triage prediction as the verdict
-              when there is one. Not rigorous: such a record carries rigorous: false.
+tiers         the interval tier confirms. The record lists every tier with its role
+              (triage / confirms), each predicted_verdict beside the confirmed one,
+              and the mismatches; the report counts them.
+--fast        (or "fast": true on a check) skips the confirmation when triage gives a
+              prediction. Not rigorous: such a record carries rigorous: false.
 status        HOLDS / FAILS / UNDECIDED are DERIVED; VOID has none
 intersection  two formulas and a box. BOTH_HOLD: both hold on every subbox reached.
               ONE_FAILS: one fails at every point of a located subbox.
@@ -184,10 +186,13 @@ fast          a triage prediction rests on a margin rule (1e-9, or 10^-(prec/2),
               times the largest magnitude met). It is a heuristic with no bound
               over a long chain of steps: (1e16 + 1) - 1e16 = 1 is predicted FAILS
               by the float tier. Only --fast lets it stand, marked rigorous: false.
-tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x and x**2
-              have different enclosures (the dependency problem), and bisection
-              narrows the gap without closing it. With a tolerance > 0 bisection
-              closes it, if the depth limit allows.
+tolerance 0   on interval inputs an identity still reads UNDECIDED: x*x = x**2 on
+              x in [0, 1] is UNDECIDED at tolerance 0 (the two enclosures differ; the
+              dependency problem), since bisection narrows the gap without closing it.
+              With a tolerance > 0 it reads HOLDS via bisection, if the depth allows.
+FAILS         on interval inputs FAILS can mean "fails on a located piece of the
+              given ranges" while holding on others; the record says which
+              (located, bisection.holds_elsewhere)
 intervals     inputs given as intervals are treated as independent ranges
 ONE_FAILS     needs a whole subbox where a formula fails; a failure at single points
               only reads UNDECIDED

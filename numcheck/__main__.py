@@ -1,7 +1,7 @@
 """python3 -m numcheck check checks.json [--json] [--fast]
 
-  --fast   take a float / Decimal triage prediction as the verdict when there is one.
-           Not rigorous; such records carry rigorous: false.
+  --fast   skip the interval confirmation when triage gives a prediction: the
+           prediction is the verdict, and the record carries rigorous: false.
 
 Exit: 0 every check HOLDS / BOTH_HOLD | 1 at least one FAILS / ONE_FAILS
       3 none failed, at least one VOID or UNDECIDED | 2 usage or unreadable input
@@ -37,12 +37,17 @@ def main(argv):
                         f" rigorous {r['rigorous']} | status {r['status']}"
                 if r["kind"] == "point" and r["triage"]:
                     t = r["triage"]
-                    line += f" | triage {t['predictions'] or 'none'}" + (
-                        f" DISAGREES: {t['disagrees_with_verdict']}"
-                        if t["disagrees_with_verdict"] else "")
+                    pred = ", ".join(f"{x['tier']} {x['predicted_verdict']}"
+                                     for x in t["predictions"]) or "none"
+                    line += f" | predicted: {pred}" + (
+                        f" MISMATCH: {t['mismatches']}" if t["mismatches"] else "")
                 if r["kind"] == "point" and r.get("bisection"):
                     b = r["bisection"]
                     line += f" | bisected: {b['examined']} pieces, {b['reading']}"
+                    if r["located"]:
+                        line += " (" + ", ".join(
+                            f"{k} in [{v['approx'][0]:.6g}, {v['approx'][1]:.6g}]"
+                            for k, v in r["located"]["subbox"].items()) + ")"
                 if r["kind"] == "point" and r["intervals"]:
                     d = r["intervals"]["difference"]["approx"]
                     line += f" | lhs - rhs in [{d[0]:.6g}, {d[1]:.6g}] tol {r['intervals']['tolerance']}"
@@ -58,6 +63,13 @@ def main(argv):
             slots = " ".join(f"{k}={v['slot_state']}" for k, v in r["slots"].items())
             print(line + f" | slots: {slots}")
         print({k: v for k, v in rep["counts"].items() if v})
+        t = rep["triage"]
+        print(f"triage: {t['predictions']} predictions, {t['confirmed']} confirmed, "
+              f"{t['mismatches']} mismatched, {t['not_confirmed_fast']} not confirmed (fast)")
+        for m in t["mismatch_log"]:
+            print(f"  MISMATCH check {m['index']} {m['formula']}: " + ", ".join(
+                f"{x['tier']} predicted {x['predicted_verdict']}, confirmed "
+                f"{x['confirmed_verdict']}" for x in m["predictions"] if x["match"] is False))
     c = rep["counts"]
     return 1 if c["FAILS"] or c["ONE_FAILS"] else (3 if c["VOID"] or c["UNDECIDED"] else 0)
 

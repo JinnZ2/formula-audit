@@ -15,16 +15,21 @@ With D an enclosure of lhs - rhs:
 The verdict comes from the interval tier: Fraction intervals, with sqrt exp
 ln sin cos as outward enclosures (precision doubling up to max_precision
 when one was used). It is the only rigorous tier. float and Decimal run
-first as TRIAGE: each predicts the verdict or says "too close to call", and
-the prediction is logged beside the verdict (a disagreement is recorded).
-Their margin rule is a heuristic with no bound over a long chain of steps,
-so a prediction is never the verdict, unless the check asks for fast
-(entry "fast": true, or --fast): then a triage prediction is taken as the
-verdict and the record carries rigorous: false.
+first as TRIAGE: each gives a predicted_verdict or says "too close to
+call". Every HOLDS / FAILS is confirmed at the interval tier, and the record
+sets predicted beside confirmed; a mismatch is listed on the record and
+counted in the report. The margin rule behind a prediction is a heuristic
+with no bound over a long chain of steps, so a prediction is never the
+verdict, unless the check asks for fast (entry "fast": true, or --fast):
+then confirmation is skipped, the prediction is the verdict, and the record
+carries rigorous: false.
 
-A straddle on interval inputs is bisected (the inputs are split, to the
-depth limit) before UNDECIDED is given: every piece HOLDS -> HOLDS, every
-piece FAILS -> FAILS, otherwise UNDECIDED, with the pieces counted.
+A straddle on interval inputs is bisected (the inputs are split, widest
+first, to the depth limit) before UNDECIDED is given:
+  every piece HOLDS                          -> HOLDS
+  a piece where it fails at every point      -> FAILS, with that piece located
+                                                (it may hold on other pieces)
+  pieces still straddling at the depth limit -> UNDECIDED
 
 An intersection: two formulas and a region (a box: an interval per region
 variable). On a subbox, both formulas HOLD (enclosure inside tolerance:
@@ -46,7 +51,7 @@ from unitaudit.check import slot_record, split_sides, Void as UnitVoid, STATUS
 from .interval import Interval
 from .tiers import DecSys, FloatSys, IntSys, NumVoid, TierCannot, evaluate
 
-VERSION = "numcheck branch2b-1"
+VERSION = "numcheck branch2b-2"
 DEFAULTS = {"decimal_precision": 50, "precision": 30, "max_precision": 120, "depth": 8}
 MAX_SUBBOXES = 20000
 
@@ -92,7 +97,7 @@ def _blank(kind, entry, index, input_path):
     get = entry.get if isinstance(entry, dict) else (lambda *_: None)
     return {"kind": kind, "verdict": "VOID", "void_reason": None, "status": None,
             "deciding_tier": None, "precision": None, "rigorous": None, "fast": None,
-            "tiers": [], "triage": None,
+            "tiers": [], "triage": None, "located": None,
             "intervals": None, "inputs": None, "units": None,
             "provenance": {"source_path": get("source_path"), "input": input_path,
                            "index": index, "tool": VERSION},
@@ -167,20 +172,19 @@ def _difference(sides, env, S):
 
 
 def _bisect_point(sides, tol, env, prec, depth_limit):
-    """A straddle on interval inputs: split the inputs and look again. The
-    enclosure of x*x - x**2 on a wide x is wide only because x is counted
-    twice; on narrow pieces it closes. Returns (verdict or None, detail).
-      every piece HOLDS -> HOLDS      every piece FAILS -> FAILS
-      a piece HOLDS and another FAILS -> None, mixed: the formula holds for
-      some of the given values and fails for others
-      pieces still straddling at the depth limit -> None"""
+    """A straddle on interval inputs: split the inputs (widest first) and look
+    again. The enclosure of x*x - x**2 on a wide x is wide only because x is
+    counted twice; on narrow pieces it closes. Returns (verdict or None, detail).
+      a piece on which the formula fails at every point -> FAILS, located
+      every piece HOLDS                                 -> HOLDS
+      pieces still straddling at the depth limit        -> None (UNDECIDED)"""
     if depth_limit < 0 or 2 ** depth_limit > MAX_SUBBOXES:
         raise Bad(f"depth must be between 0 and {MAX_SUBBOXES.bit_length() - 1}")
     names = sorted(n for n, v in env.items() if not v.is_point)
     stack = [({n: env[n] for n in names}, 0)]
-    counts = {"examined": 0, "hold": 0, "fail": 0, "straddle_at_depth_limit": 0}
-    deepest, first_open, first_hold, first_fail = 0, None, None, None
-    while stack:
+    counts = {"examined": 0, "hold": 0, "straddle_at_depth_limit": 0}
+    deepest, first_open, located = 0, None, None
+    while stack and located is None:
         box, depth = stack.pop()
         counts["examined"] += 1
         deepest = max(deepest, depth)
@@ -189,10 +193,9 @@ def _bisect_point(sides, tol, env, prec, depth_limit):
         sub = {n: box[n].as_record() for n in names}
         if v == "HOLDS":
             counts["hold"] += 1
-            first_hold = first_hold or {"subbox": sub, "difference": d.as_record()}
         elif v == "FAILS":
-            counts["fail"] += 1
-            first_fail = first_fail or {"subbox": sub, "difference": d.as_record()}
+            located = {"subbox": sub, "depth": depth, "difference": d.as_record(),
+                       "tolerance": str(tol)}
         elif depth >= depth_limit:
             counts["straddle_at_depth_limit"] += 1
             first_open = first_open or {"subbox": sub, "difference": d.as_record()}
@@ -201,20 +204,17 @@ def _bisect_point(sides, tol, env, prec, depth_limit):
             a, b = box[widest].split()
             stack.append((dict(box, **{widest: b}), depth + 1))
             stack.append((dict(box, **{widest: a}), depth + 1))
-        if counts["hold"] and counts["fail"]:
-            break                                  # mixed: nothing more to learn
-    mixed = bool(counts["hold"] and counts["fail"])
-    open_ = counts["straddle_at_depth_limit"]
-    verdict = None
-    if not mixed and not open_ and not stack:
-        verdict = "HOLDS" if counts["hold"] else "FAILS"
+    verdict = "FAILS" if located else (None if counts["straddle_at_depth_limit"] else "HOLDS")
     return verdict, {**counts, "depth_limit": depth_limit, "deepest": deepest,
-                     "variables_split": names, "mixed": mixed,
-                     "reading": ("holds for some of the given values and fails for others"
-                                 if mixed else "decided on every piece" if verdict else
+                     "variables_split": names,
+                     "stopped_at_first_failure": located is not None,
+                     "holds_elsewhere": bool(located and counts["hold"]),
+                     "reading": ("fails at every point of the located piece of the inputs"
+                                 + ("; holds on other pieces" if located and counts["hold"]
+                                    else "") if located else
+                                 "holds on every piece" if verdict else
                                  "pieces still straddle at the depth limit"),
-                     "a_piece_that_holds": first_hold, "a_piece_that_fails": first_fail,
-                     "first_straddling_piece": first_open}
+                     "located": located, "first_straddling_piece": first_open}
 
 
 def check_point(entry, index=None, input_path=None, fast=False):
@@ -244,7 +244,7 @@ def check_point(entry, index=None, input_path=None, fast=False):
         for S in (FloatSys(), DecSys(int(opt["decimal_precision"]))):
             if not points:
                 tiers.append({"tier": S.name, "role": "triage", "outcome": "skipped",
-                              "predicts": None, "reason": "an input is an interval"})
+                              "predicted_verdict": None, "reason": "an input is an interval"})
                 continue
             guess = None
             try:
@@ -252,12 +252,12 @@ def check_point(entry, index=None, input_path=None, fast=False):
                 guess, detail = S.judge(d, tol)
                 tiers.append({"tier": S.name, "role": "triage", "precision": S.precision,
                               "outcome": "predicts" if guess else "too close to call",
-                              "predicts": guess,
+                              "predicted_verdict": guess,
                               **{k: (v if isinstance(v, str) else repr(v))
                                  for k, v in detail.items()}})
             except (TierCannot, NumVoid) as e:
                 tiers.append({"tier": S.name, "role": "triage", "precision": S.precision,
-                              "outcome": "cannot run", "predicts": None, "reason": str(e)})
+                              "outcome": "cannot run", "predicted_verdict": None, "reason": str(e)})
             if guess and fast:
                 verdict = guess
                 tiers[-1]["role"] = "decided (fast)"
@@ -271,7 +271,7 @@ def check_point(entry, index=None, input_path=None, fast=False):
                 lhs, rhs, d = _difference(sides, env, S)
                 verdict, _ = S.judge(d, tol)
                 exact = not S.used_enclosure
-                tiers.append({"tier": "interval", "role": "decides", "predicts": None,
+                tiers.append({"tier": "interval", "role": "confirms", "predicted_verdict": None,
                               "precision": "exact" if exact else prec,
                               "outcome": "decided" if verdict else "straddles the tolerance edge"})
                 rec["intervals"] = {"lhs": lhs.as_record(), "rhs": rhs.as_record(),
@@ -283,13 +283,20 @@ def check_point(entry, index=None, input_path=None, fast=False):
             if not verdict and not points:
                 verdict, rec["bisection"] = _bisect_point(sides, tol, env, prec,
                                                           int(opt["depth"]))
+                rec["located"] = rec["bisection"]["located"]
             rec.update(verdict=verdict or "UNDECIDED", deciding_tier="interval",
                        precision="exact" if exact else prec, rigorous=True, status="DERIVED")
-        guesses = [t["predicts"] for t in tiers if t.get("predicts")]
-        rec["triage"] = {"predictions": guesses,
-                         "disagrees_with_verdict": [t["tier"] for t in tiers
-                                                    if t.get("predicts")
-                                                    and t["predicts"] != rec["verdict"]]}
+        confirmed = rec["verdict"] if rec["rigorous"] else None
+        per_tier = [{"tier": t["tier"], "predicted_verdict": t["predicted_verdict"],
+                     "confirmed_verdict": confirmed,
+                     "match": None if confirmed is None else t["predicted_verdict"] == confirmed}
+                    for t in tiers if t.get("predicted_verdict")]
+        rec["triage"] = {"predictions": per_tier,
+                         "confirmed_verdict": confirmed,
+                         "confirmed_at": "interval" if confirmed else None,
+                         "mismatches": [x["tier"] for x in per_tier if x["match"] is False],
+                         "note": None if confirmed else
+                         "fast: the prediction was taken as the verdict, not confirmed"}
     except (Bad, NumVoid) as e:
         rec.update(verdict="VOID", void_reason=str(e), status=None)
     except Exception as e:                       # fail closed
@@ -419,6 +426,19 @@ def check_all(data, input_path=None, fast=False):
             r["void_reason"] = f"unknown kind {kind!r}"
             records.append(r)
     names = ("HOLDS", "FAILS", "UNDECIDED", "VOID", "BOTH_HOLD", "ONE_FAILS")
-    return {"tool": VERSION, "input": input_path,
+    tri = [r["triage"] for r in records if r.get("triage")]
+    return {"tool": VERSION, "input": input_path, "fast": fast,
             "counts": {v: sum(1 for r in records if r["verdict"] == v) for v in names},
+            "triage": {"predictions": sum(len(t["predictions"]) for t in tri),
+                       "confirmed": sum(1 for t in tri for x in t["predictions"]
+                                        if x["match"] is True),
+                       "mismatches": sum(len(t["mismatches"]) for t in tri),
+                       "not_confirmed_fast": sum(1 for t in tri for x in t["predictions"]
+                                                 if x["match"] is None),
+                       "mismatch_log": [{"index": r["provenance"]["index"],
+                                         "formula": r.get("formula"),
+                                         "tiers": r["triage"]["mismatches"],
+                                         "predictions": r["triage"]["predictions"]}
+                                        for r in records
+                                        if r.get("triage") and r["triage"]["mismatches"]]},
             "records": records}
