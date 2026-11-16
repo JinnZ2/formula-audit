@@ -23,12 +23,21 @@ Definition: the README section "Glyph (branch 3 reasoning operator)".
             use is flagged on the step). A reference with no rate and no
             default -> VOID, naming it. The cost is DERIVED from those inputs.
               every age 0, rates above 0 -> cost 0: the world was just read;
-                                            inaction is free and ranks first
+                                            inaction scores 0, and a tool
+                                            must have a net score above 0
               a rate of 0 declared       -> VOID: a static world is claimed
                                             and nothing here evidences it
   SOLVE     each option is a rival "this option moves toward the target";
-            the rivals are ranked by branch 5 (infer) posterior x 1 / cost.
-            All rivals are recorded, not only the winner.
+            branch 5 (infer) gives each a posterior. The rivals are ranked by
+            NET SCORE, in the cost unit:
+                a tool     posterior x gain - cost
+                inaction   - sum of rate_i x age_i        (what waiting loses)
+            gain is a case input: what moving toward the target is worth, in
+            the cost unit (checked by branch 1). No gain -> the step is VOID
+            ("gain undeclared"). All rivals are recorded, not only the winner.
+            (An earlier rule, posterior x 1 / cost, let a free inaction beat
+            any tool whatever the evidence; it is kept only as a regression
+            test.)
   EXPLORE   tools whose features are present but unpaired (no candidate made
             from that instance yet); the first in table order. If none:
             inaction.
@@ -53,12 +62,13 @@ from unitaudit.check import check_formula as unit_check
 from .environment import FEATURES, read_environment
 from .tools import TABLE_V0, _ref, apply_tool
 
-VERSION = "glyph branch3-1"
+VERSION = "glyph branch3-2"
 MODES = ("SOLVE", "EXPLORE")
 CASE_FIELDS = ("purpose", "environment", "energy_budget", "time_budget", "needed_function_met",
-               "now", "default_drift_rate", "units", "inaction_time", "tools", "evidence",
-               "priors", "proposals", "note")
-UNIT_FIELDS = ("energy", "cost", "time", "drift_rate")
+               "now", "default_drift_rate", "units", "gain", "inaction_time", "tools",
+               "evidence", "priors", "proposals", "note")
+UNIT_FIELDS = ("energy", "cost", "time", "drift_rate")       # always needed
+OPTIONAL_UNITS = ("gain",)                                   # needed when a step ranks
 LOG_DIR = "glyph_log"
 
 
@@ -150,7 +160,7 @@ def check_units(case, env):
     if not isinstance(units, dict):
         raise Void("units are VOID: the case must declare units for "
                    + ", ".join(UNIT_FIELDS))
-    extra = [k for k in units if k not in UNIT_FIELDS]
+    extra = [k for k in units if k not in UNIT_FIELDS + OPTIONAL_UNITS]
     if extra:
         raise Void(f"units: undeclared field {extra[0]!r}")
     missing = [k for k in UNIT_FIELDS if not isinstance(units.get(k), str)]
@@ -174,6 +184,29 @@ def check_units(case, env):
             raise Void(f"units {r['verdict']} for {formula} ({where}; "
                        + ", ".join(f"{k} in {v}" for k, v in symbols.items()) + f"): {why}")
     return out
+
+
+def read_gain(case):
+    """What moving toward the target is worth, in the cost unit. Raises Void."""
+    if case.get("gain") is None:
+        raise Void("gain undeclared: a SOLVE step ranks by posterior x gain - cost and "
+                   "the case gives no gain")
+    gain = _frac(case["gain"], "gain")
+    if gain < 0:
+        raise Void("gain is below 0")
+    units = case.get("units") or {}
+    if not isinstance(units.get("gain"), str):
+        raise Void("units are VOID for: gain")
+    r = unit_check({"formula": "gain = cost",
+                    "symbols": {"gain": units["gain"], "cost": units["cost"]}})
+    check = {"formula": "gain = cost", "units": {"gain": units["gain"], "cost": units["cost"]},
+             "of": "the case's gain", "verdict": r["verdict"], "status": r["status"]}
+    if r["verdict"] != "PASS":
+        why = r["void_reason"] if r["verdict"] == "VOID" else (
+            r["located_error"]["rule"] + ": " + " vs ".join(r["located_error"]["dims"]))
+        raise Void(f"units {r['verdict']} for gain = cost (gain in {units['gain']}, cost in "
+                   f"{units['cost']}): {why}")
+    return gain, check
 
 
 def inaction_cost(case, env, state):
@@ -250,19 +283,23 @@ def options(case, env, state, paired):
     return out
 
 
-def _score(post, cost):
-    """posterior x 1 / cost; a cost of 0 is free: None stands for unbounded."""
-    return None if cost == 0 else post / cost
+def net_score(kind, post, gain, cost):
+    """A tool: posterior x gain - cost. Inaction: - its drift cost."""
+    return -cost if kind == "inaction" else post * gain - cost
 
 
-def choose_solve(case, opts):
+def choose_solve(case, opts, gain):
     """Returns (best option, rival table, reason, infer summary, infer input)."""
     rivals = [o for o in opts if o["open"]]
+    kinds = {o["name"]: o["kind"] for o in rivals}
+    costs = {o["name"]: o["cost"] for o in rivals}
     if len(rivals) == 1:
-        return rivals[0], [{"name": rivals[0]["name"], "posterior": None,
-                            "cost": str(rivals[0]["cost"]), "score": None}], \
+        o = rivals[0]
+        return o, [{"name": o["name"], "kind": o["kind"], "posterior": None,
+                    "gain": str(gain), "cost": str(o["cost"]),
+                    "score": str(-o["cost"]) if o["kind"] == "inaction" else None}], \
             "the only open option", None, None
-    names = {o["name"] for o in rivals}
+    names = set(kinds)
     priors = case.get("priors") or {}
     hyps = [{"id": o["name"], "statement": f"{o['name']} moves toward the target",
              **({"prior": priors[o["name"]]["prior"],
@@ -277,32 +314,30 @@ def choose_solve(case, opts):
     rep = infer_rank(infer_input)
     if rep["verdict"] != "RANKED":
         raise Void(f"branch 5 could not rank the options: {rep['void_reason']}")
-    table = rival_table(rep, {o["name"]: o["cost"] for o in rivals})
+    table = rival_table(rep, costs, kinds, gain)
     tie = len(table) > 1 and table[0]["score"] == table[1]["score"]
     best = next(o for o in rivals if o["name"] == table[0]["name"])
-    reason = ("costs nothing: the environment was just read" if best["cost"] == 0 else
-              "highest posterior x 1 / cost") + (
+    reason = "highest net score (tool: posterior x gain - cost; inaction: - drift)" + (
         "; tied with " + table[1]["name"] + ", taken by name" if tie else "")
     return best, table, reason, \
         {"evidence_used": len(evidence), "counts": rep["counts"],
          "status": rep["status"], "prior": rep["log"][1]["op"]}, \
-        {"input": infer_input, "log": rep["log"],
+        {"input": infer_input, "log": rep["log"], "gain": str(gain),
+         "score_rule": "tool: posterior x gain - cost; inaction: - sum of rate x age",
          "posteriors": {h["id"]: h["posterior"] for h in rep["hypotheses"]}}
 
 
-def rival_table(rep, costs):
+def rival_table(rep, costs, kinds, gain):
     post = {h["id"]: Fraction(h["posterior"]) for h in rep["hypotheses"]}
     rows = []
     for name, cost in costs.items():
-        sc = _score(post[name], cost)
-        rows.append({"name": name, "posterior": str(post[name]), "cost": str(cost),
-                     "score": "unbounded (cost 0)" if sc is None else str(sc),
+        sc = net_score(kinds[name], post[name], gain, cost)
+        rows.append({"name": name, "kind": kinds[name], "posterior": str(post[name]),
+                     "gain": None if kinds[name] == "inaction" else str(gain),
+                     "cost": str(cost), "score": str(sc),
                      "direction": next(h["direction"] for h in rep["hypotheses"]
-                                       if h["id"] == name), "_sort": sc})
-    rows.sort(key=lambda r: (0 if r["_sort"] is None else 1,
-                             -(r["_sort"] or 0), r["name"]))
-    for r in rows:
-        del r["_sort"]
+                                       if h["id"] == name)})
+    rows.sort(key=lambda r: (-Fraction(r["score"]), r["name"]))
     return rows
 
 
@@ -333,6 +368,7 @@ def step(case, state, base_dir, n, log, write=True):
              "purpose": case.get("purpose"), "mode": None, "gate": None,
              "environment": None, "options": None, "rivals": None, "chosen": None,
              "choice_reason": None, "infer": None, "infer_log": None, "units": None,
+             "gain": None,
              "candidate": None,
              "state_before": _show(state), "state_after": _show(state)}
     log.append(entry)
@@ -356,8 +392,11 @@ def step(case, state, base_dir, n, log, write=True):
         entry["options"] = [{k: (str(v) if isinstance(v, Fraction) else v)
                              for k, v in o.items() if k != "_insts"} for o in opts]
         if mode == "SOLVE":
+            gain, gain_check = read_gain(case)
+            entry["units"].append(gain_check)
+            entry["gain"] = str(gain)
             best, entry["rivals"], entry["choice_reason"], entry["infer"], saved = \
-                choose_solve(case, opts)
+                choose_solve(case, opts, gain)
             if saved is not None and write:
                 entry["infer_log"] = save_infer(saved, base_dir)
         else:
@@ -488,7 +527,10 @@ def _rerun_infer(entry, ref, base_dir):
         if rep["verdict"] != "RANKED":
             return f"branch 5 does not rank the saved input: {rep['void_reason']}"
         costs = {r["name"]: Fraction(r["cost"]) for r in entry["rivals"]}
-        again = rival_table(rep, costs)
+        kinds = {r["name"]: r["kind"] for r in entry["rivals"]}
+        if saved.get("gain") != entry.get("gain"):
+            return "the gain in the saved file is not the gain in the step log"
+        again = rival_table(rep, costs, kinds, Fraction(entry["gain"]))
     except Exception as e:
         return f"{ref['file']}: {type(e).__name__}: {e}"
     if again != entry["rivals"]:

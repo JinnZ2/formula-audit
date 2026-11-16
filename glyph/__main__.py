@@ -66,9 +66,13 @@ def main(argv):
                 print(f"   option {o['name']:20s} cost {o['cost']:>6s} "
                       + ("open" if o["open"] else f"closed: {o['why_not']}"))
             for r in e["rivals"]:
-                if "score" in r:
-                    print(f"   rival  {r['name']:20s} posterior {r['posterior']} x 1/"
-                          f"{r['cost']} = {r['score']}")
+                if r.get("score") is None:
+                    continue
+                if r.get("kind") == "inaction":
+                    print(f"   rival  {r['name']:20s} - drift {r['cost']} = {r['score']}")
+                else:
+                    print(f"   rival  {r['name']:20s} posterior {r['posterior']} x gain "
+                          f"{r['gain']} - cost {r['cost']} = {r['score']}")
             c = e["candidate"]
             print(f"   chosen {e['chosen']} ({e['choice_reason']})" + (
                 f" -> {c['kind']} {c['key']} in {c['written_to']}, status {c['status']}, "

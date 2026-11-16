@@ -465,8 +465,8 @@ translation. The tribe is not named. Co-authored (human + AI).
 case.json   purpose {mode: SOLVE | EXPLORE, target}; environment: references
             {branch, file, record, sha256, at, rate} to records of branches 1 / 2a / 2b /
             4 / 5; energy_budget and time_budget {available, reserve};
-            needed_function_met y / n / VOID; now; units {energy, cost, time,
-            drift_rate}; default_drift_rate (optional)
+            needed_function_met y / n / VOID; now; gain; units {energy, cost, time,
+            drift_rate, gain}; default_drift_rate (optional)
                  |
    input     no purpose -> VOID (never defaulted). Every reference is RE-READ: file
              opened, record found, sha256 compared; one that does not check -> VOID.
@@ -480,10 +480,15 @@ case.json   purpose {mode: SOLVE | EXPLORE, target}; environment: references
              cost(inaction) = sum over the references of rate_i x (now - at_i), DERIVED
                a reference with no rate and no default_drift_rate -> VOID, naming it
                the default's use is flagged on the step
-               every age 0, rates > 0 -> cost 0: just read; inaction is free, ranks first
+               every age 0, rates > 0 -> cost 0: just read; waiting loses nothing yet
                a rate of 0 declared -> VOID ("static world claimed, unevidenced")
    SOLVE     each open option is a rival "this option moves toward the target";
-             ranked by branch 5 posterior x 1 / cost. All rivals recorded.
+             branch 5 gives each a posterior; ranked by NET SCORE in the cost unit:
+               a tool     posterior x gain - cost
+               inaction   - sum of rate_i x age_i
+             gain: a case input, what moving toward the target is worth, in the cost
+             unit (branch 1 checks gain = cost). No gain -> VOID ("gain undeclared").
+             All rivals recorded.
    EXPLORE   the first tool, in table order, with a feature present and unpaired;
              none -> inaction.
    one step  the tool turns one feature instance into one candidate, written to
@@ -537,6 +542,12 @@ drift          a rate per reference, in declared units that branch 1 checks; the
                themselves are inputs. Nothing measures how fast a record goes stale.
 ranking        computed inline by branch 5 at each step, then saved and re-runnable;
                it is not read from an earlier branch 5 record
+score rule     posterior x gain - cost against - drift. An earlier rule, posterior x
+               1 / cost, let a free inaction (cost 0, just after an update) beat a tool
+               with any evidence; it is kept only as a regression test.
+gain           one number for the whole case, given by the case author. Nothing here
+               measures what reaching the target is worth, and every tool is credited
+               the same gain.
 tools          four, chosen to touch branches 1, 2b and 4; branch 2a and branch 5
                records can be referenced but no v0 tool reads a feature from them
 ```

@@ -62,7 +62,9 @@ class World:
              "energy_budget": {"available": "10", "reserve": "4"},
              "time_budget": {"available": "8", "reserve": "2"},
              "needed_function_met": "y", "now": "6", "default_drift_rate": "1/8",
-             "units": {"energy": "J", "cost": "J", "time": "s", "drift_rate": "W"}}
+             "gain": "10",
+             "units": {"energy": "J", "cost": "J", "time": "s", "drift_rate": "W",
+                       "gain": "J"}}
         c.update(kw)
         return c
 
@@ -232,26 +234,100 @@ class TestOptions(Base):
         self.assertEqual(e["options"][-1]["default_rate_used_for"], [1])
         self.assertEqual(e["options"][-1]["cost_parts"][1]["rate_from"], "default")
 
-    def test_just_updated_costs_zero_and_ranks(self):
-        # every reference is dated now: nothing has drifted yet. Cost 0, DERIVED, and
-        # inaction ranks first even against a tool with strong evidence
+    FRESH = "every reference dated now: nothing has drifted yet"
+
+    def fresh(self, lr=None, **kw):
         refs = [self.w.ref("2b", 0, 6, "1/2"), self.w.ref("4", 0, 6, "3")]
-        ev = [{"id": "e", "type": "direct", "hypothesis": "boundary_probe", "lr": "1000",
-               "provenance": "p", "shared_ancestry": [], "status": "OBSERVED"}]
-        r = self.w.run(self.w.case("SOLVE", refs=refs, evidence=ev))
+        ev = [] if lr is None else [
+            {"id": "e", "type": "direct", "hypothesis": "boundary_probe", "lr": lr,
+             "provenance": "p", "shared_ancestry": [], "status": "OBSERVED"}]
+        return self.w.case("SOLVE", refs=refs, evidence=ev, **kw)
+
+    def test_regression_ratio_rule_let_free_inaction_beat_any_tool(self):
+        # The earlier rule ranked by posterior x 1 / cost. Just after an update inaction
+        # costs 0, so its ratio was unbounded and it beat a tool with a likelihood ratio
+        # of 1000. This test used to assert that outcome; it now asserts the opposite.
+        r = self.w.run(self.fresh("1000", gain="10"))
         e = r["log"][1]
-        self.assertEqual(r["verdict"], "STEPPED")
         ina = e["options"][-1]
         self.assertEqual((ina["cost"], ina["cost_status"]), ("0", "DERIVED"))
+        rivals = {x["name"]: x for x in e["rivals"]}
+        post = F(rivals["boundary_probe"]["posterior"])
+        self.assertEqual(post, F(1000, 1002))
+        # what the ratio rule did with these numbers: inaction's cost is 0, so it had no
+        # finite ratio and was put first whatever the tool's posterior
+        self.assertEqual(F(rivals["inaction"]["cost"]), 0)
+        with self.assertRaises(ZeroDivisionError):
+            F(rivals["inaction"]["posterior"]) / F(rivals["inaction"]["cost"])
+        # the net rule: the tool is worth 1000/1002 x 10 - 3, waiting is worth 0
+        self.assertEqual(e["chosen"], "boundary_probe")           # was: inaction
+        self.assertEqual(e["rivals"][0]["name"], "boundary_probe")
+        self.assertNotIn("unbounded", json.dumps(e["rivals"]))
+
+    def test_just_updated_tool_with_gain_above_cost_wins(self):
+        e = self.w.run(self.fresh("1000", gain="10"))["log"][1]
+        rivals = {x["name"]: x for x in e["rivals"]}
+        self.assertEqual(e["chosen"], "boundary_probe")
+        self.assertEqual(F(rivals["boundary_probe"]["score"]), F(1000, 1002) * 10 - 3)
+        self.assertEqual(rivals["inaction"]["score"], "0")       # fresh: waiting loses nothing
+        self.assertEqual((rivals["boundary_probe"]["gain"], rivals["inaction"]["gain"]),
+                         ("10", None))
+        self.assertEqual(e["gain"], "10")
+        self.assertIn("net score", e["choice_reason"])
+        self.assertEqual(len(e["rivals"]), 3)                    # every rival on the record
+
+    def test_just_updated_same_tool_with_gain_below_cost_loses_to_inaction(self):
+        e = self.w.run(self.fresh("1000", gain="2"))["log"][1]
+        rivals = {x["name"]: x for x in e["rivals"]}
         self.assertEqual(e["chosen"], "inaction")
-        self.assertIn("costs nothing", e["choice_reason"])
-        self.assertEqual(e["rivals"][0]["name"], "inaction")
-        self.assertEqual(e["rivals"][0]["score"], "unbounded (cost 0)")
-        self.assertEqual(len(e["rivals"]), 3)                   # the others are still recorded
-        # one step later the world has aged: the cost is no longer 0 and the tool wins
-        r = self.w.run(self.w.case("SOLVE", refs=refs, evidence=ev), steps=2)
-        self.assertEqual([x["chosen"] for x in r["log"][1:]], ["inaction", "boundary_probe"])
-        self.assertEqual(r["log"][2]["options"][-1]["cost"], "7/2")
+        self.assertEqual(F(rivals["boundary_probe"]["score"]), F(1000, 1002) * 2 - 3)
+        self.assertLess(F(rivals["boundary_probe"]["score"]), 0)
+        self.assertEqual(rivals["inaction"]["score"], "0")
+        self.assertIsNone(e["candidate"])
+
+    def test_long_idle_acting_beats_inaction_at_a_lower_posterior(self):
+        # no evidence: every rival at 1/3. gain 2: slot_fill_audit is worth 2/3 - 1 = -1/3.
+        fresh = self.w.run(self.fresh(None, gain="2"))["log"][1]
+        self.assertEqual(fresh["chosen"], "inaction")            # 0 beats -1/3
+        idle = self.w.run(self.fresh(None, gain="2", now="26"))["log"][1]     # 20 later
+        rivals = {x["name"]: x for x in idle["rivals"]}
+        self.assertEqual(rivals["slot_fill_audit"]["posterior"], "1/3")
+        self.assertEqual(rivals["slot_fill_audit"]["score"], "-1/3")
+        self.assertEqual(rivals["inaction"]["score"], "-70")     # -(1/2 + 3) x 20
+        self.assertEqual(idle["chosen"], "slot_fill_audit")      # acting now loses less
+        # the same tool, the same posterior, the same gain: only the idle time differs
+        self.assertEqual({x["name"]: x["posterior"] for x in fresh["rivals"]},
+                         {x["name"]: x["posterior"] for x in idle["rivals"]})
+
+    def test_gain_missing_is_void(self):
+        c = self.fresh("1000")
+        del c["gain"]
+        r = self.w.run(c)
+        self.assertEqual((r["verdict"], r["steps_done"]), ("VOID", 0))
+        self.assertIn("gain undeclared", r["void_reason"])
+        self.assertIsNone(r["log"][1]["chosen"])
+        self.assertIsNone(r["log"][1]["rivals"])
+        self.assertIsNone(self.w.proposals())
+        r = self.w.run(self.fresh("1000", gain="-1"))
+        self.assertEqual(r["verdict"], "VOID")
+        # EXPLORE does not rank, so it does not need a gain
+        c = self.w.case()
+        del c["gain"]
+        self.assertEqual(self.w.run(c)["verdict"], "STEPPED")
+
+    def test_gain_unit_mismatch_is_void(self):
+        good = {"energy": "J", "cost": "J", "time": "s", "drift_rate": "W"}
+        for unit, why in (("W", "units FAIL for gain = cost"), ("s", "units FAIL"),
+                          ("furlong", "units VOID for gain = cost")):
+            r = self.w.run(self.fresh("1000", units=dict(good, gain=unit)))
+            self.assertEqual((r["verdict"], r["steps_done"]), ("VOID", 0), unit)
+            self.assertIn(why, r["void_reason"])
+            self.assertIsNone(r["log"][1]["chosen"])
+        r = self.w.run(self.fresh("1000", units=good))             # no unit for gain
+        self.assertIn("units are VOID for: gain", r["void_reason"])
+        e = self.w.run(self.fresh("1000"))["log"][1]               # and when it is right
+        self.assertEqual(e["units"][-1]["formula"], "gain = cost")
+        self.assertEqual(e["units"][-1]["verdict"], "PASS")
 
     def test_rate_zero_is_void(self):
         for refs, default in (([self.w.ref("2b", 0, 3, "0")], "1/8"),
@@ -306,17 +382,17 @@ class TestUnits(Base):
         c = self.w.case(units={"energy": "J", "cost": "J", "time": "s"})
         self.assertIn("units are VOID for: drift_rate", self.w.run(c)["void_reason"])
         c = self.w.case(units={"energy": "J", "cost": "J", "time": "s", "drift_rate": "W",
-                               "mass": "kg"})
+                               "gain": "J", "mass": "kg"})
         self.assertEqual(self.w.run(c)["verdict"], "VOID")
 
     def test_unit_checks_are_on_the_step(self):
         e = self.w.run(self.w.case())["log"][1]
         self.assertEqual([(u["formula"], u["verdict"]) for u in e["units"]],
-                         [("energy = cost", "PASS"), ("cost = rate*dt", "PASS")])
+                         [("energy = cost", "PASS"), ("cost = rate*dt", "PASS")])   # EXPLORE
         self.assertEqual(e["units"][1]["units"], {"cost": "J", "rate": "W", "dt": "s"})
         # equivalent spellings pass: J/s for W
         r = self.w.run(self.w.case(units={"energy": "kg*m**2/s**2", "cost": "J", "time": "s",
-                                          "drift_rate": "J/s"}))
+                                          "drift_rate": "J/s", "gain": "N*m"}))
         self.assertEqual(r["verdict"], "STEPPED")
         # a reference may carry its own rate unit; it is checked too
         refs = [dict(self.w.ref("2b", 0, 3, "1"), rate_unit="W"),
@@ -352,9 +428,9 @@ class TestSolve(Base):
         rivals = {x["name"]: x for x in e["rivals"]}           # both rivals are on the record
         self.assertEqual(sorted(rivals), ["boundary_probe", "inaction"])
         self.assertEqual((rivals["inaction"]["posterior"], rivals["inaction"]["cost"],
-                          rivals["inaction"]["score"]), ("1/2", "7/4", "2/7"))
+                          rivals["inaction"]["score"]), ("1/2", "7/4", "-7/4"))
         self.assertEqual((rivals["boundary_probe"]["cost"], rivals["boundary_probe"]["score"]),
-                         ("50", "1/100"))
+                         ("50", "-45"))                          # 1/2 x 10 - 50
         self.assertIsNone(e["candidate"])
         self.assertIsNone(self.w.proposals())
         self.assertEqual(e["delta"], {"energy": "0", "time": "1"})
@@ -368,9 +444,10 @@ class TestSolve(Base):
         rivals = {x["name"]: x for x in e["rivals"]}
         self.assertEqual(sorted(rivals), ["boundary_probe", "inaction", "slot_fill_audit"])
         self.assertEqual(rivals["boundary_probe"]["posterior"], "5/7")
-        self.assertEqual(rivals["boundary_probe"]["score"], "5/21")
+        self.assertEqual(rivals["boundary_probe"]["score"], "29/7")      # 5/7 x 10 - 3
         self.assertEqual(e["infer"]["evidence_used"], 1)
-        self.assertEqual(rivals["inaction"]["score"], "4/49")           # (1/7) / (7/4)
+        self.assertEqual(rivals["inaction"]["score"], "-7/4")           # - drift
+        self.assertEqual(rivals["slot_fill_audit"]["score"], "3/7")     # 1/7 x 10 - 1
         saved = self.w.dir / e["infer_log"]["file"]                     # the ranking's own log
         self.assertTrue(saved.exists())
         self.assertEqual(len(e["infer_log"]["sha256"]), 64)
@@ -490,7 +567,8 @@ class TestLog(Base):
         self.assertEqual((again["verdict"], again["infer_logs_rerun"], again["failures"]),
                          ("REPRODUCED", 2, []))
         saved = json.loads((self.w.dir / r["log"][1]["infer_log"]["file"]).read_text())
-        self.assertEqual(sorted(saved), ["input", "log", "posteriors"])
+        self.assertEqual(sorted(saved), ["gain", "input", "log", "posteriors", "score_rule"])
+        self.assertEqual(saved["gain"], "10")
         self.assertEqual(saved["posteriors"]["boundary_probe"], "5/7")
         self.assertEqual(saved["input"]["evidence"][0]["lr"], "5")
 
