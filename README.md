@@ -7,20 +7,21 @@ and passes its own tests within tested scope; it reads Metamath databases
 only. Branch 2b (data points and intersections) is implemented and passes its
 own tests within tested scope; only its interval tier is rigorous. Branch 4
 (word slots) is implemented and passes its own tests within tested scope; its
-shipped place table is an example, every entry PROPOSED. Branch 3 is not built
-and is not specified in this repository yet. Three known blind spots of branch 1 are listed below
+shipped place table is an example, every entry PROPOSED. Branch 3 (the glyph)
+is defined below in words only: nothing of it is built or tested. Three known
+blind spots of branch 1 are listed below
 and are not built.
 
 License: CC0 1.0. Co-authored (human + AI). Stdlib only, phone-runnable.
 
-## Three branches
+## Branches
 
 ```text
 branch 1   unit audit      unitaudit/   BUILT: dimension check, PASS / FAIL / VOID
 branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof verifier
 branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers, point
                                          checks, intersections over a box
-branch 3   VOID            not named or specified here
+branch 3   glyph           (no code)    DEFINED in this README, status PROPOSED; not built
 branch 4   word slots      wordslots/   BUILT: place table, claim records, slot check;
                                         numeric slot bounds handed to branch 2b
 ```
@@ -235,6 +236,99 @@ powers        integer exponents and 1/2 only; exponent must be a literal number
 sin, cos      arguments within +-1000
 not built     relative tolerance, inequalities (< <=), more than two formulas
 ```
+
+## Glyph (branch 3 reasoning operator)
+
+Status: PROPOSED. A definition in words. No code, no test, no run stands
+behind this section.
+
+**What it is.** A compressed reasoning operator, in the way a differential
+equation is a compressed statement of how something changes. The mark is
+notation; the content is the operation. A glyph is defined by what it does
+when applied, not by an English label put on it.
+
+```text
+                 purpose                       environment
+            SOLVE | EXPLORE          units, slots, domains, verdicts,
+            (missing -> VOID)        proof state, physics
+                    \                        /
+                     v                      v
+              +-------------------------------------+
+              |               GLYPH                 |
+              |                                     |
+              |  purpose = EXPLORE ?                |
+              |    gate, all three must be yes:     |
+              |      needed function met?           |
+              |      energy surplus?                |
+              |      time surplus?                  |
+              |    any no  ->  SOLVE                |
+              |                                     |
+              |  options, inaction among them       |
+              |    cost(inaction) = drift between   |
+              |    the world and an un-updated      |
+              |    self-model; grows with time      |
+              |    since the last update; never     |
+              |    assumed zero                     |
+              +-------------------------------------+
+                               |
+                               v
+               tool choice + one step, recorded
+                               |
+         EXPLORE result -> PROPOSED -> checked by 2b -> proven by 2a
+                               |
+                 environment re-read after each step
+                               |
+                               +----> back to the top
+```
+
+**Inputs.**
+
+```text
+purpose       SOLVE or EXPLORE. It is an input, given from outside the operator.
+              No purpose given -> VOID. It is not guessed and not defaulted.
+environment   what the other branches read and report: units (branch 1), slots
+              (branch 4), domains and verdicts (branch 2b), proof state (branch
+              2a), and physics: the constraints the world puts on the step itself
+```
+
+**Gate before EXPLORE.** Three questions, in this order, function first:
+is the needed function met, is there an energy surplus, is there a time
+surplus. Any "no" turns the purpose to SOLVE. Exploring is what a system
+does with surplus, after what it needs is covered.
+
+**Options include inaction.** Doing nothing is always on the list and always
+has a cost: the drift between the world and a self-model that was not
+updated. That cost grows with the time since the last update. It is never
+taken to be zero.
+
+**Output.** A tool choice and one step, both recorded. What EXPLORE returns
+is PROPOSED: it is checked by branch 2b and proven by branch 2a before it is
+anything more. The environment is read again after every step; a step is
+never planned on a reading taken before the last one.
+
+**Related work.** Pointers, with how far each was read. None of these was
+used to build anything here.
+
+```text
+rational metareasoning,      Lieder & Griffiths. CARRIED: named by a co-author;
+strategy selection           not read in this build.
+algorithm selection          Rice, 1976. CARRIED: named by a co-author; not read
+                             in this build.
+resource-rational            arXiv 2408.01253. Abstract page read 2026-11-16:
+exploration, meta-BAMDP      Godara and Aleman, "Metareasoning in uncertain
+                             environments: a meta-BAMDP framework" (v1 2 Aug
+                             2024). The abstract speaks of a resource-rational
+                             view of human exploration under cognitive
+                             constraints; the words "explore-exploit" are not in
+                             it. The body was not read.
+```
+
+Added here, beside that work: purpose as an input; the function-first gate;
+the drift cost of inaction; physics in the environment. Whether any of the
+four is already in that literature was not checked: the claim is PROPOSED.
+
+**Provenance.** The concept comes from an oral tradition and is given here in
+translation. The tribe is not named. Co-authored (human + AI).
 
 ## Branch 4: word slots
 
