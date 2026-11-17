@@ -1,0 +1,118 @@
+{
+ "input": "set.mm",
+ "input_sha256": "099864b6785c45be66026cf19ec3f3a77c9cac15d586eb954d8de205ea2fa52b",
+ "repeats": 3,
+ "human_interest": null,
+ "ai_interest": null,
+ "full": {
+  "seconds_median": 16.57,
+  "seconds": [
+   16.33,
+   16.57,
+   16.93
+  ],
+  "counts": {
+   "PASS": 48391,
+   "FAIL": 0,
+   "VOID": 0
+  },
+  "provable_statements": 48391
+ },
+ "write_run_seconds": 17.49,
+ "write_refused": [],
+ "from_snapshot": [
+  {
+   "theorem": "1lt9",
+   "theorem_index": 12098,
+   "prefix_lines": 139908,
+   "prefix_sha256": "ef675db55159b4887cce840e3b97950739948d8fdd54c2a8f3a662872209fe80",
+   "axioms_used": 215,
+   "carried": 12098,
+   "verified_here": 36293,
+   "seconds_median": 15.82,
+   "seconds": [
+    15.19,
+    16.04,
+    15.82
+   ],
+   "saved_seconds": 0.75,
+   "saved_fraction": 0.045,
+   "verdicts_identical": true,
+   "differences": []
+  },
+  {
+   "theorem": "reipcl",
+   "theorem_index": 24196,
+   "prefix_lines": 353583,
+   "prefix_sha256": "f6787d7c592f58ea63d48d5d02167a5296c22904bf9c5734fffbd727d2d832c9",
+   "axioms_used": 435,
+   "carried": 24196,
+   "verified_here": 24195,
+   "seconds_median": 12.17,
+   "seconds": [
+    12.17,
+    11.8,
+    12.4
+   ],
+   "saved_seconds": 4.4,
+   "saved_fraction": 0.266,
+   "verdicts_identical": true,
+   "differences": []
+  },
+  {
+   "theorem": "wl-sbcom2d-lem2",
+   "theorem_index": 36293,
+   "prefix_lines": 627075,
+   "prefix_sha256": "03ef2686fd190e84386c0d797e05835d491fc6e08b635f17763600b5e0f4a1b6",
+   "axioms_used": 32,
+   "carried": 36293,
+   "verified_here": 12098,
+   "seconds_median": 7.93,
+   "seconds": [
+    7.86,
+    7.93,
+    8.24
+   ],
+   "saved_seconds": 8.64,
+   "saved_fraction": 0.521,
+   "verdicts_identical": true,
+   "differences": []
+  }
+ ],
+ "planted": {
+  "stale_hash": {
+   "edited_line": 47001,
+   "snapshot": "reipcl",
+   "state": "VOID",
+   "verified": 0,
+   "reason": "snapshot reipcl: the first 353583 lines do not hash to the stored sha256",
+   "full_check_of_edited_file": {
+    "PASS": 48390,
+    "FAIL": 1,
+    "VOID": 0
+   }
+  },
+  "mutated_theorem": {
+   "theorem": "cncff",
+   "theorem_index": 23916,
+   "cited_by_later": 127,
+   "honest_writer": {
+    "written": 0,
+    "refused": [
+     "cncff: verdict FAIL, a snapshot needs PASS"
+    ]
+   },
+   "full_check_verdict": "FAIL",
+   "forged_snapshot_state": "MATCHED",
+   "carried_verdict": "PASS",
+   "carried_verified_here": false,
+   "citing_fail": 127,
+   "citing_pass": 0,
+   "counts": {
+    "PASS": 48264,
+    "FAIL": 127,
+    "VOID": 0
+   }
+  }
+ }
+}
