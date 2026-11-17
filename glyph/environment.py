@@ -17,7 +17,8 @@ Features read from those records (what a tool can need):
   mixed_region         a branch-2b record whose verdict is MIXED
   conjugate_exponents  two exponents p, q with p * q = 1 in the formulas of
                        branch-1 / 2b records (sqrt counts as 1/2)
-  void_slots           a branch-4 record with a slot left VOID
+  void_slots           a branch-4 record with a slot left VOID (a slot that
+                       belongs to another sense than the claim's does not count)
   declared_scope       the case declares the scope the environment was drawn
                        in: {place, time, population}. This one is read from
                        the case, not from a record: where the edge of the
@@ -196,6 +197,7 @@ def read_environment(refs, base_dir, scope=None, frame_answers=None):
                 and r["data"].get("kind") == "point":
             feats["mixed_region"].append({"sources": [r]})
         if r["branch"] == "4" and any(s.get("slot_state") == "VOID"
+                                      and s.get("in_sense") is not False
                                       for s in (r["data"].get("slots") or [])):
             feats["void_slots"].append({"sources": [r]})
     exps = [(k, base, r) for r in rows if r["branch"] in ("1", "2b")

@@ -233,7 +233,10 @@ class TestV1(unittest.TestCase):
 
     def test_emotive_needs_its_reading(self):
         r = claim("warm", {"x1": "the welcome", "x2": "local custom"})
-        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["reading"]))
+        self.assertEqual((r["verdict"], r["missing_required"]),
+                         ("DEGRADED", ["reading", "x3", "x4"]))    # x2 is filled; SOCIAL's are not
+        self.assertEqual([m["sense"] for m in r["degraded"]["missing"]],
+                         [None, "SOCIAL", "SOCIAL"])
         social = {"x1": "the host", "x3": "the guests", "x4": "the welcome at the door"}
         r = claim("warm", social, reading="SOCIAL")
         self.assertEqual(r["verdict"], "PASS")                    # SOCIAL needs no magnitude
@@ -257,7 +260,8 @@ class TestV1(unittest.TestCase):
             r = claim("warm", {"x1": x1}, evidential="se'o", speaker="Ana")
             self.assertEqual(r["verdict"], "PASS", x1)
         r = claim("warm", None, evidential="se'o")                 # no speaker to fill x1 with
-        self.assertEqual((r["verdict"], r["missing_required"][0]), ("DEGRADED", "speaker"))
+        self.assertEqual(r["verdict"], "DEGRADED")
+        self.assertEqual(r["missing_required"][:2], ["reading", "speaker"])   # the sense first
 
     def test_she_is_hostile_self_report_is_degraded(self):
         r = claim("hostile", {"x1": "she"}, evidential="se'o", speaker="Ana")
@@ -508,12 +512,57 @@ class TestV1(unittest.TestCase):
 
     def test_safe_needs_its_sense(self):
         r = claim("safe", FULL, sense=None)
-        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["sense"]))
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["sense", "x4"]))
         self.assertIn("PROTECTED or NOT_PERILOUS", r["degraded"]["missing"][0]["reason"])
         self.assertEqual(r["usable"]["slots"], FULL)               # what is filled is kept
-        # with no sense, the sense-bound slot is not asked for; the sense is
+        # with no sense, the sense comes first, then each sense's empty slots under its name
         r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense=None)
-        self.assertEqual(r["missing_required"], ["sense"])
+        self.assertEqual(r["missing_required"], ["sense", "x2", "x4"])
+
+    def test_no_sense_safe_lists_sense_shared_then_each_sense_grouped(self):
+        r = claim("safe", {"x1": "the bridge"}, sense=None)
+        self.assertEqual(r["verdict"], "DEGRADED")
+        m = r["degraded"]["missing"]
+        self.assertEqual([(x["name"], x["sense"]) for x in m],
+                         [("sense", None), ("x3", None), ("x2", "PROTECTED"),
+                          ("x4", "NOT_PERILOUS")])
+        self.assertEqual([x["kind"] for x in m], ["field", "slot", "slot", "slot"])
+        self.assertEqual([x["role"] for x in m[1:]],
+                         ["for whom", "from threat", "under conditions"])
+        self.assertEqual(m[2]["reason"], "required under sense PROTECTED; no sense given")
+        self.assertEqual(r["missing_by_sense"],
+                         {"required": ["sense"], "shared": ["x3"],
+                          "by_sense": {"PROTECTED": ["x2"], "NOT_PERILOUS": ["x4"]}})
+        self.assertEqual(r["located_error"]["slot"], "sense")     # the first thing to settle
+        self.assertEqual(r["senses"], ["PROTECTED", "NOT_PERILOUS"])
+        # a missing source is shared too, and stays ahead of the per-sense groups
+        r = claim("safe", {"x1": "the bridge"}, sense=None, source_id=None)
+        self.assertEqual(r["missing_required"], ["sense", "source_id", "x3", "x2", "x4"])
+        self.assertEqual(r["missing_by_sense"]["shared"], ["source_id", "x3"])
+        # warm's sense is its reading: the same grouping
+        r = claim("warm", {"x1": "the room"})
+        self.assertEqual([(x["name"], x["sense"]) for x in r["degraded"]["missing"]],
+                         [("reading", None), ("x2", "PHYSICAL"), ("x3", "SOCIAL"),
+                          ("x4", "SOCIAL")])
+        # a word with no senses: every missing item carries sense null, nothing grouped
+        r = claim("near", {"x1": "the shop"})
+        self.assertEqual([(x["name"], x["sense"]) for x in r["degraded"]["missing"]],
+                         [("x2", None)])
+        self.assertIsNone(r["missing_by_sense"])
+
+    def test_protected_safe_missing_x2_lists_only_x2(self):
+        r = claim("safe", {"x1": "the bridge", "x3": "pedestrians"}, sense="PROTECTED")
+        self.assertEqual((r["verdict"], r["missing_required"]), ("DEGRADED", ["x2"]))
+        m = r["degraded"]["missing"]
+        self.assertEqual([(x["name"], x["sense"], x["reason"]) for x in m],
+                         [("x2", "PROTECTED", "required slot empty")])
+        self.assertIsNone(r["missing_by_sense"])                  # a sense was given
+        r = claim("safe", {"x1": "the bridge"}, sense="PROTECTED")   # slot order kept
+        self.assertEqual([(x["name"], x["sense"]) for x in r["degraded"]["missing"]],
+                         [("x2", "PROTECTED"), ("x3", None)])
+        r = claim("safe", {"x1": "the bridge"}, sense="NOT_PERILOUS")
+        self.assertEqual([(x["name"], x["sense"]) for x in r["degraded"]["missing"]],
+                         [("x3", None), ("x4", "NOT_PERILOUS")])
         r = claim("safe", FULL, sense="PROTECTED")                 # snura: from threat x2
         self.assertEqual((r["verdict"], r["sense"], r["sense_predicate"]),
                          ("PASS", "PROTECTED", "snura"))
@@ -706,7 +755,7 @@ class TestCli(unittest.TestCase):
                                           "sense": "PROTECTED", "source_id": "report 12"}]))
             r = self.cli("check", str(f))
             self.assertEqual(r.returncode, 3)
-            self.assertIn("missing: x2 (required slot empty); x3 (required slot empty)",
+            self.assertIn("missing: x2[PROTECTED] (required slot empty); x3 (required slot empty)",
                           r.stdout)
             self.assertIn("DEGRADED", r.stdout)
             t = Path(d) / "t.json"

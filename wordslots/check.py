@@ -18,6 +18,10 @@ PLACE TABLE (JSON): word -> ordered slots, Lojban-style.
   SENSE: a slot bound to senses is asked for only under one of them. A word
   with sense_field "sense" and no sense given is DEGRADED, naming sense; a
   sense the word does not declare is VOID.
+  Every missing item carries "sense": the sense a missing slot belongs to, or
+  null for a slot all senses share (and for fields). With no sense given the
+  list is: the sense field, then the shared items, then the empty required
+  slots of each sense, grouped in the table's order (missing_by_sense).
 
 CLAIM RECORD: fixed fields, declared here before any record is read
 (COBOL-style: a field that was not declared is an error, not extra data),
@@ -100,7 +104,7 @@ from pathlib import Path
 from infer.ladder import record_sha
 from numcheck.check import Bad, check_point, to_interval
 
-VERSION = "wordslots branch4-5"
+VERSION = "wordslots branch4-6"
 RECORD_FIELDS = ("word", "slots", "reading", "sense", "magnitude", "evidential", "speaker",
                  "oral_record", "source_id", "source_path", "table")
 FILLING_FIELDS = ("text", "value", "unit", "status", "is")
@@ -383,6 +387,7 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
            "located_error": None, "status": None, "pass_equivalent": False,
            "word_class": None, "shape": None,
            "lojban": None, "sense": None, "sense_field": None, "sense_predicate": None,
+           "senses": None, "missing_by_sense": None,
            "slots": None, "missing_required": [], "degraded": None, "usable": None,
            "ranges": [], "reading": get("reading"), "magnitude": get("magnitude"),
            "evidential": get("evidential"), "claim_status": None, "claim_provenance": None,
@@ -410,7 +415,8 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
         entry = words[word]
         rec.update(table_entry_status=entry["status"], word_class=entry.get("class"),
                    shape=entry.get("shape"), lojban=entry.get("lojban"),
-                   sense_field=entry.get("sense_field"))
+                   sense_field=entry.get("sense_field"),
+                   senses=list(entry.get("senses") or {}) or None)
         ev = claim.get("evidential")
         if ev is not None and ev not in EVIDENTIAL:
             raise Void(f"unknown evidential {ev!r}; one of: " + ", ".join(EVIDENTIAL))
@@ -466,8 +472,9 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
         # ---- evidential: the claim's own status, and the scope of se'o ----
         missing, waived, self_scope = [], [], False
 
-        def lack(name, kind, reason, role=None):
+        def lack(name, kind, reason, role=None, of_sense=None):
             missing.append({"name": name, "kind": kind, "role": role, "reason": reason,
+                            "sense": of_sense,
                             "provenance": {"source_path": prov["source_path"],
                                            "input": input_path, "index": index,
                                            "declared_in": "place table" if kind == "slot"
@@ -540,8 +547,10 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
                     state = "WAIVED"
                     waived.append(s["name"])
                 else:
-                    lack(s["name"], "slot", "required slot empty", s.get("role"))
+                    lack(s["name"], "slot", "required slot empty", s.get("role"),
+                         sense if s.get("senses") else None)
             rows.append({"name": s["name"], "role": s.get("role"), "required": s["required"],
+                         "sense": sense if s.get("senses") and in_sense else None,
                          "source_predicate": s["source_predicate"],
                          "senses": s.get("senses"), "in_sense": in_sense,
                          "slot_status": s["status"], "slot_state": state,
@@ -565,6 +574,24 @@ def check_claim(claim, words, index=None, input_path=None, base_dir=None):
             else:
                 lack("magnitude", "field", f"a {reading} reading of {word!r} needs a "
                                            "magnitude with its unit")
+        # no sense given: the sense first, then what every sense shares, then the
+        # empty slots of each sense, grouped under its name
+        rec["missing_by_sense"] = None
+        if sense_field and sense is None and not self_scope:
+            for name in senses:
+                for s in entry["slots"]:
+                    if s["required"] and name in (s.get("senses") or []) \
+                            and _empty(filled.get(s["name"])):
+                        lack(s["name"], "slot", f"required under sense {name}; no sense given",
+                             s.get("role"), name)
+            first = [m for m in missing if m["kind"] == "field" and m["name"] == sense_field]
+            shared = [m for m in missing if m["sense"] is None and m not in first]
+            missing[:] = first + shared + [m for m in missing if m["sense"] is not None]
+            rec["missing_by_sense"] = {
+                "required": [m["name"] for m in first],
+                "shared": [m["name"] for m in shared],
+                "by_sense": {name: [m["name"] for m in missing if m["sense"] == name]
+                             for name in senses}}
         rec["slots"] = rows                               # void slots are kept, not dropped
         rec["missing_required"] = [m["name"] for m in missing]
         rec["waived_by_self_report"] = waived

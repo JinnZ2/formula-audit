@@ -675,6 +675,11 @@ sense         a word may declare senses, each with the predicate it comes from, 
               already had), "sense" for safe (PROTECTED / NOT_PERILOUS). A slot
               bound to senses is asked for only under one of them. safe with no
               sense -> DEGRADED, naming sense; a sense not declared -> VOID.
+missing       every missing item carries sense: the sense a missing slot belongs to, or
+              null for a slot all senses share. With no sense given the list is the
+              sense field, then the shared items, then each sense's empty required
+              slots grouped under its name (also in missing_by_sense). The glyph's
+              slot_fill_audit lists its void slots the same way.
 source_       every slot names the gismu or lujvo its place comes from, or
 predicate     "physics_def". A slot without one voids the table.
 widths        word X(20), slot text X(40), reading X(8), sense X(12), unit X(12), evidential X(10),

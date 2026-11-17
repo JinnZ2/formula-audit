@@ -501,8 +501,35 @@ class TestExplore(Base):
                          ("EXPLORE", "PROPOSED"))
         q = data["questions"][0]
         self.assertEqual((q["word"], q["tag"], q["status"]), ("safe", "EXPLORE", "PROPOSED"))
-        self.assertEqual([s["name"] for s in q["void_slots"]], ["x2", "x3", "x4"])
+        # no sense on the claim: the sense, the shared slot, then each sense's slot
+        self.assertEqual([(s["name"], s["sense"]) for s in q["void_slots"]],
+                         [("sense", None), ("x3", None), ("x2", "PROTECTED"),
+                          ("x4", "NOT_PERILOUS")])
+        self.assertEqual(q["void_slots"][0]["role"], "which sense: PROTECTED or NOT_PERILOUS")
         self.assertIn("no tool has an unpaired feature", r["log"][3]["choice_reason"])
+
+    def test_slot_fill_audit_with_a_sense_asks_only_for_that_sense(self):
+        table = json.loads((ROOT / "wordslots" / "places.json").read_text())
+        claims = [{"word": "safe", "sense": "PROTECTED",
+                   "slots": {"x1": "the bridge", "x3": "pedestrians"}},
+                  {"word": "safe", "sense": "PROTECTED",
+                   "slots": {"x1": "the bridge", "x2": "collapse", "x3": "pedestrians"}},
+                  {"word": "near", "slots": {"x1": "the shop"}}]
+        rep = wordslots.check_all(claims, table)
+        (self.w.dir / "b4s.json").write_text(json.dumps(rep))
+        refs = [{"branch": "4", "file": "b4s.json", "record": i,
+                 "sha256": record_sha(rep["records"][i]), "at": 1} for i in range(3)]
+        env = read_environment(refs, self.w.dir)
+        # the whole PROTECTED claim has x4 VOID, but x4 is another sense's: not a feature
+        self.assertEqual([i["sources"][0]["record"] for i in env["features"]["void_slots"]],
+                         [0, 2])
+        self.w.run(self.w.case(refs=refs, tools=[TABLE_V0[3]]), steps=2)
+        qs = self.w.proposals()["questions"]
+        self.assertEqual([(s["name"], s["sense"]) for s in qs[0]["void_slots"]],
+                         [("x2", "PROTECTED")])                   # only x2
+        self.assertEqual(qs[0]["sense"], "PROTECTED")
+        self.assertEqual([(s["name"], s["sense"]) for s in qs[1]["void_slots"]],
+                         [("x2", None), ("x3", None)])            # no senses: all null
 
     def test_all_four_tools(self):
         refs = [self.w.ref("1", 0, 1), self.w.ref("1", 1, 1), self.w.ref("1", 2, 1),

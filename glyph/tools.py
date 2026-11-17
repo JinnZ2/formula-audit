@@ -90,6 +90,27 @@ def _hull(a, b):
     return out
 
 
+def void_slots(d):
+    """The slots of a branch-4 record still to be asked for, each with the sense
+    it belongs to (null: shared by all senses). A sense given: the VOID slots of
+    that sense and the shared ones. No sense given, for a word that has senses:
+    the sense first, then the shared slots, then each sense's slots, grouped."""
+    def row(s, sense):
+        return {"name": s["name"], "role": s.get("role"), "required": s.get("required"),
+                "sense": sense}
+    voids = [s for s in d["slots"] if s.get("slot_state") == "VOID"]
+    field, senses = d.get("sense_field"), d.get("senses") or []
+    if not field or d.get("sense") is not None:
+        return [row(s, d.get("sense") if s.get("senses") else None)
+                for s in voids if s.get("in_sense") is not False]
+    shared = [row(s, None) for s in voids if not s.get("senses")]
+    if field in (d.get("waived_by_self_report") or []):    # a self-report: no sense asked
+        return shared
+    return [{"name": field, "role": "which sense: " + " or ".join(senses),
+             "required": True, "sense": None}] + shared + [
+        row(s, name) for name in senses for s in voids if name in (s.get("senses") or [])]
+
+
 def apply_tool(name, inst):
     """One feature instance -> one candidate: ("proposal" | "question", body)."""
     src = inst["sources"]
@@ -122,10 +143,8 @@ def apply_tool(name, inst):
                                     "negative this is a question, not an identity"}
     if name == "slot_fill_audit":
         d = src[0]["data"]
-        return "question", {"word": d.get("word"),
-                            "void_slots": [{"name": s["name"], "role": s.get("role"),
-                                            "required": s.get("required")}
-                                           for s in d["slots"] if s.get("slot_state") == "VOID"],
+        return "question", {"word": d.get("word"), "sense": d.get("sense"),
+                            "void_slots": void_slots(d),
                             "note": "the claim says nothing until these are filled"}
     if name == "frame_edge":
         slots = frame_slots(inst["answers"])

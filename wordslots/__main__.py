@@ -42,7 +42,8 @@ def main(argv):
                 line += f" | {r['void_reason']}"
             elif r["verdict"] == "DEGRADED":
                 line += " | missing: " + "; ".join(
-                    f"{m['name']} ({m['reason']})" for m in r["degraded"]["missing"]) \
+                    f"{m['name']}" + (f"[{m['sense']}]" if m.get("sense") else "")
+                    + f" ({m['reason']})" for m in r["degraded"]["missing"]) \
                     + " | kept: " + (", ".join(r["degraded"]["kept"]) or "nothing")
             elif r["located_error"] and "range" in r["located_error"]:
                 e = r["located_error"]
