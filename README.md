@@ -44,7 +44,8 @@ this README are checked against the code by `tests/test_readme_claims.py`;
 
 ```text
 branch 1   unit audit      unitaudit/   BUILT: dimension check, PASS / FAIL / VOID
-branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof verifier
+branch 2a  proof kernel    kernel/      BUILT: Metamath .mm reader and proof verifier,
+                                         snapshots (verify only what comes after a PASS)
 branch 2b  data points     numcheck/     BUILT: interval arithmetic, three tiers, point
                                          checks, intersections over a box
 branch 3   glyph           glyph/       BUILT (v0): gate, options with inaction drift cost,
@@ -147,6 +148,30 @@ rests on    a PASS that uses a statement which is itself FAIL or VOID says so
             (rests_on_non_pass); it is counted, not hidden
 stopped     --limit / --until / --seconds stop early and say so; what was not
             read has no verdict and whole_file_read is false
+```
+
+Snapshots (branch 2a)
+
+```text
+python3 -m kernel snapshot file.mm (--at L1,L2 | --at-fraction 0.25,0.5) [--store snapshots.json]
+python3 -m kernel check file.mm --from-snapshot snapshots.json [--snap LABEL]
+python3 -m kernel.snapshot_measure path/to/set.mm [--repeats 3]   # by hand, not CI
+
+snapshot    {theorem, statement, axioms_used (transitive, syntax axioms included),
+             prefix_sha256 of the lines read through its proof, prefix_lines,
+             theorem_index, kernel_version, rests_on_non_pass, prefix_non_pass}
+write       only after a kernel PASS for that theorem; anything else is refused
+            and nothing is stored for it
+use         the prefix is re-read and hashed first; a different hash (any byte,
+            a comment, line endings), kernel version, or a statement not where the
+            snapshot says -> VOID, nothing verified. Else the prefix's statements
+            are carried (verified_here false, PASS unless listed in
+            prefix_non_pass, which keep their verdict and reason) and only the
+            statements after it are verified
+saved       only proof checking: the prefix is still read, hashed and parsed
+limit       the store is plain JSON; a forged or edited record that claims PASS
+            is caught only by later statements that cite the theorem (they FAIL),
+            and not at all if none does
 ```
 
 Limits of branch 2a
@@ -830,7 +855,8 @@ scanner               placeholder: one-'=' lines and `backtick` spans that parse
                       prose and LaTeX formulas, picks up ordinary assignments
 formulas.json         example input; its units were typed in, not read from a source
 stdlib used           ast, fractions, json, plus sys and pathlib (CLI, scanner), unittest;
-                      branch 2a: time; branch 2b: decimal, math (isqrt, floor, float tier)
+                      branch 2a: time, hashlib (snapshots), statistics and tempfile
+                      (snapshot_measure); branch 2b: decimal, math (isqrt, floor, float tier)
 python                3.10 (floor) and 3.13 run by .github/workflows/ci.yml; see its runs
 ```
 
