@@ -40,6 +40,7 @@ Verdicts
 Status: PASS / FAIL are DERIVED. Axioms are given input: OBSERVED, with no
 verdict. VOID has no status.
 """
+import hashlib
 import time
 
 KEYWORDS = {"$c", "$v", "$f", "$e", "$d", "$a", "$p", "$.", "$=", "$(", "$)",
@@ -101,11 +102,20 @@ class Database:
         self.stopped = None
         self.line = 0
         self.statements_read = 0
+        self.used_of = {}           # provable label -> labels of assertions it cites
+        self.hashing = False        # sha256 of the lines read, kept per $p (snapshots)
+        self._hash = None
+        self.digest_at = {}         # provable label -> (lines read, sha256 of those lines)
+        self.carry = None           # a loaded snapshot: prefix theorems are not re-verified
 
     # ---- tokens -------------------------------------------------------
     def _raw(self, lines):
+        if self.hashing:
+            self._hash = hashlib.sha256()
         for n, line in enumerate(lines, 1):
             self.line = n
+            if self._hash is not None:
+                self._hash.update(line.encode("utf-8"))
             for tok in line.split():
                 yield tok
 
@@ -260,8 +270,13 @@ class Database:
                             self._record(label, line, "VOID", void_reason=e.reason)
                             raise
                         a = self._make_assertion(label, "p", tuple(expr), line)
-                        self._verify(a, proof)
+                        if self.carry is not None and len(self.theorems) < self.carry["index"]:
+                            self._carry(a, proof)
+                        else:
+                            self._verify(a, proof)
                         self.assertions[label] = a
+                        if self._hash is not None:
+                            self.digest_at[label] = (self.line, self._hash.copy().hexdigest())
                         if limit is not None and len(self.theorems) >= limit:
                             self.stopped = f"limit of {limit} provable statements reached"
                             break
@@ -278,21 +293,32 @@ class Database:
             self.file_void = {"reason": e.reason, "line": e.line}
         except Exception as e:             # fail closed
             self.file_void = {"reason": f"internal: {type(e).__name__}: {e}", "line": self.line}
+        if self.file_void is not None and self.carry is not None and \
+                len(self.theorems) <= self.carry["index"]:
+            # the snapshot was never confirmed in place: nothing carried stands
+            for r in self.theorems:
+                if not r["verified_here"]:
+                    r.update(verdict="VOID", status=None, located_error=None,
+                             void_reason="carried from a snapshot that did not match in place")
+                    self.verdict_of[r["label"]] = "VOID"
         return self
 
     # ---- proofs ---------------------------------------------------------
     def _record(self, label, line, verdict, fmt=None, steps=None, fail=None, void_reason=None,
-                rests=()):
+                rests=(), carried=None, located=None):
         self.verdict_of[label] = verdict
+        if fail is not None:
+            located = {"step": fail.step, "step_label": fail.label, "rule": fail.rule,
+                       "expected": _text(fail.expected), "got": _text(fail.got)}
         self.theorems.append({
             "label": label, "line": line, "verdict": verdict,
             "status": "DERIVED" if verdict in ("PASS", "FAIL") else None,
             "proof_format": fmt, "steps": steps,
-            "located_error": None if fail is None else {
-                "step": fail.step, "step_label": fail.label, "rule": fail.rule,
-                "expected": _text(fail.expected), "got": _text(fail.got)},
+            "located_error": located,
             "void_reason": void_reason,
             "rests_on_non_pass": sorted(rests),
+            "verified_here": carried is None,
+            "carried_from_snapshot": carried,
             "human_interest": None, "ai_interest": None})
 
     def _decode(self, a, proof):
@@ -329,9 +355,51 @@ class Database:
             raise ProofVoid("compressed proof: ends inside a number")
         return steps
 
+    def _carry(self, a, proof):
+        """A theorem inside a snapshot's prefix: not re-verified. Its verdict is the
+        snapshot's (PASS unless the snapshot lists it as not PASS). The labels it
+        cites are read from the proof text, not from checked steps."""
+        c = self.carry
+        fmt = "compressed" if proof and proof[0] == "(" else "normal"
+        if fmt == "compressed":
+            cited = proof[1:proof.index(")")] if ")" in proof else []
+        else:
+            cited = proof
+        used = {t for t in cited if t in self.assertions}
+        self.used_of[a.label] = used
+        np = c["non_pass"].get(a.label)
+        verdict = "PASS" if np is None else np["verdict"]
+        rests = {u for u in used if self.verdict_of.get(u, "PASS") != "PASS"}
+        self._record(a.label, a.line, verdict, fmt, None, rests=rests, carried=c["label"],
+                     located=None if np is None else np.get("located_error"),
+                     void_reason=None if np is None else np.get("void_reason"))
+        if len(self.theorems) == c["index"]:
+            if a.label != c["label"] or a.stmt != tuple(c["statement"].split()):
+                raise FileVoid(f"snapshot {c['label']}: the statement at its position "
+                               f"is {a.label} {_text(a.stmt)}", self.line)
+
+    def axioms_used(self, label):
+        """Every $a reached from `label` through the assertions its proof cites,
+        and theirs, transitively. Includes syntax axioms (typecodes other than |-)."""
+        seen, out, todo = set(), set(), [label]
+        while todo:
+            x = todo.pop()
+            if x in seen:
+                continue
+            seen.add(x)
+            b = self.assertions.get(x)
+            if b is None:
+                continue
+            if b.kind == "a":
+                out.add(x)
+            else:
+                todo.extend(self.used_of.get(x, ()))
+        return sorted(out)
+
     def _verify(self, a, proof):
         fmt = "compressed" if proof and proof[0] == "(" else "normal"
         used, count = set(), 0
+        self.used_of[a.label] = used
         try:
             if not proof:
                 raise ProofVoid("empty proof")
@@ -443,6 +511,12 @@ class Database:
                 "pass_resting_on_non_pass": sum(1 for r in self.theorems
                                                 if r["verdict"] == "PASS"
                                                 and r["rests_on_non_pass"]),
+                "verified_here": sum(1 for r in self.theorems if r["verified_here"]),
+                "carried_from_snapshot": sum(1 for r in self.theorems
+                                             if not r["verified_here"]),
+                "snapshot": None if self.carry is None else {
+                    "theorem": self.carry["label"], "index": self.carry["index"],
+                    "prefix_sha256": self.carry["prefix_sha256"], "state": "MATCHED"},
                 "compressed": sum(1 for r in self.theorems
                                   if r["proof_format"] == "compressed"),
                 "proof_steps": sum(r["steps"] or 0 for r in self.theorems),
@@ -455,12 +529,54 @@ def check_lines(lines, **kw):
     return Database().read(lines, **kw)
 
 
+def prefix_sha256(path, lines):
+    """sha256 of the first `lines` lines of the file, bytes as stored. None if the
+    file has fewer lines."""
+    h = hashlib.sha256()
+    n = 0
+    with open(path, encoding="utf-8", errors="strict", newline="") as f:
+        for line in f:
+            if n == lines:
+                break
+            h.update(line.encode("utf-8"))
+            n += 1
+    return h.hexdigest() if n == lines else None
+
+
 def check_file(path, **kw):
+    return run_file(path, **kw)[0]
+
+
+def run_file(path, hashing=False, snapshot=None, **kw):
+    """snapshot: a snapshot record (kernel/snapshot.py). Its prefix is re-read and
+    hashed first; a different hash or kernel version makes the run VOID, with
+    nothing verified. Otherwise the prefix's theorems are carried, not verified."""
     t0 = time.perf_counter()
+    db = Database()
+    db.hashing = hashing
     try:
-        with open(path, encoding="utf-8", errors="strict") as f:
-            db = Database().read(f, **kw)
+        if snapshot is not None:
+            why = None
+            if snapshot.get("kernel_version") != VERSION:
+                why = (f"snapshot {snapshot.get('theorem')}: kernel version "
+                       f"{snapshot.get('kernel_version')!r}, this kernel is {VERSION!r}")
+            elif snapshot.get("verdict") != "PASS":
+                why = f"snapshot {snapshot.get('theorem')}: its verdict is not PASS"
+            elif prefix_sha256(path, snapshot["prefix_lines"]) != snapshot["prefix_sha256"]:
+                why = (f"snapshot {snapshot['theorem']}: the first "
+                       f"{snapshot['prefix_lines']} lines do not hash to the stored sha256")
+            if why is not None:
+                db.file_void = {"reason": why, "line": None}
+                rep = db.report(str(path), time.perf_counter() - t0)
+                rep["snapshot"] = {"theorem": snapshot.get("theorem"), "state": "VOID",
+                                   "reason": why}
+                return rep, db
+            db.carry = {"label": snapshot["theorem"], "index": snapshot["theorem_index"],
+                        "statement": snapshot["statement"],
+                        "prefix_sha256": snapshot["prefix_sha256"],
+                        "non_pass": snapshot.get("prefix_non_pass", {})}
+        with open(path, encoding="utf-8", errors="strict", newline="") as f:
+            db.read(f, **kw)
     except UnicodeDecodeError as e:
-        db = Database()
         db.file_void = {"reason": f"not UTF-8 / ASCII text: {e.reason}", "line": None}
-    return db.report(str(path), time.perf_counter() - t0)
+    return db.report(str(path), time.perf_counter() - t0), db
