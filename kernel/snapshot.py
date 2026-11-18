@@ -22,13 +22,16 @@ Rules
            VOID before it. Anything else is refused and nothing is written.
   use      --from-snapshot: the prefix is re-read and hashed first. A different
            hash, a different kernel version, or a statement that is not where the
-           snapshot says -> VOID, and nothing is verified. Otherwise the prefix's
-           provable statements are carried (verified_here false) and only the
-           statements after it are verified.
+           snapshot says -> VOID, and nothing is verified. Otherwise the snapshot
+           theorem is re-verified, K more prefix theorems drawn with a logged seed
+           are re-verified, and the rest of the prefix is carried (verified_here
+           false). A re-verified verdict other than the carried one -> VOID,
+           naming the theorem. The statements after the prefix are verified.
   limit    the store is plain JSON. A record written by hand, or edited, is not
-           detected as such: a snapshot that claims PASS for a theorem that would
-           FAIL shows up only through the statements after it that cite it (they
-           FAIL), and not at all if none does.
+           detected as such. A forged PASS for the snapshot theorem is caught on
+           every load. A forged PASS for another prefix theorem is caught when it
+           is drawn (chance K / (index - 1) per load) or when a later verified
+           statement cites it; otherwise it is carried.
 """
 import json
 from pathlib import Path
@@ -114,14 +117,17 @@ def select(data, label=None):
     return snaps[0], None
 
 
-def write(path, labels=(), fractions=(), store="snapshots.json", snapshot=None):
+def write(path, labels=(), fractions=(), store="snapshots.json", snapshot=None, spot=25,
+          seed=None):
     """Run the kernel on `path` (from `snapshot` if given) and write a snapshot for
     each named label and each fraction of the provable statements (by position).
     Returns (written records, refusals, report)."""
-    rep, db = run_file(path, hashing=True, snapshot=snapshot)
+    rep, db = run_file(path, hashing=True, snapshot=snapshot, spot=spot, seed=seed)
     targets = list(labels)
     n = len(db.theorems)
     for f in fractions:
+        # cut point: position k = round(n * f), Python's round (halves to even),
+        # clamped to 1 .. n
         k = max(1, min(n, round(n * f)))
         if n:
             targets.append(db.theorems[k - 1]["label"])
