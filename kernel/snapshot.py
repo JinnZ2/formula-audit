@@ -117,18 +117,43 @@ def select(data, label=None):
     return snaps[0], None
 
 
+def cut_position(n, f):
+    """Position k = round(n * f), Python's round (halves to even), clamped to 1..n."""
+    return max(1, min(n, round(n * f)))
+
+
+def _count_provable(path):
+    """Provable statements in the file, by token, before the run (for caches at
+    fractions: the positions must be known while reading)."""
+    from .mm import Database
+    with open(path, encoding="utf-8", errors="strict", newline="") as f:
+        return sum(1 for t in Database()._tokens(f) if t == "$p")
+
+
 def write(path, labels=(), fractions=(), store="snapshots.json", snapshot=None, spot=25,
-          seed=None):
+          seed=None, cache_dir=None):
     """Run the kernel on `path` (from `snapshot` if given) and write a snapshot for
     each named label and each fraction of the provable statements (by position).
-    Returns (written records, refusals, report)."""
-    rep, db = run_file(path, hashing=True, snapshot=snapshot, spot=spot, seed=seed)
+    cache_dir: also write each snapshot's parse cache there, and record the cache
+    file's sha256 in the snapshot. Returns (written records, refusals, report)."""
+    cap = None
+    if cache_dir is not None:
+        from .parse_cache import Capture
+        positions = set()
+        if fractions:
+            try:
+                n0 = _count_provable(path)
+            except Exception:
+                n0 = 0
+            positions = {cut_position(n0, f) for f in fractions} if n0 else set()
+        cap = Capture(positions)
+        cap.labels = set(labels)
+    rep, db = run_file(path, hashing=True, snapshot=snapshot, spot=spot, seed=seed,
+                       capture=cap)
     targets = list(labels)
     n = len(db.theorems)
     for f in fractions:
-        # cut point: position k = round(n * f), Python's round (halves to even),
-        # clamped to 1 .. n
-        k = max(1, min(n, round(n * f)))
+        k = cut_position(n, f)
         if n:
             targets.append(db.theorems[k - 1]["label"])
     written, refused = [], []
@@ -138,8 +163,14 @@ def write(path, labels=(), fractions=(), store="snapshots.json", snapshot=None, 
         r, why = make(db, t, path)
         if r is None:
             refused.append(why)
-        else:
-            written.append(r)
+            continue
+        if cap is not None:
+            if t in cap.states:
+                r["parse_cache"] = cap.write(t, r["kernel_version"], cache_dir)
+            else:
+                r["parse_cache"] = None
+                r["parse_cache_note"] = "not captured: position not known while reading"
+        written.append(r)
     if written:
         add(store, written)
     return written, refused, rep

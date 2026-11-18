@@ -157,6 +157,7 @@ python3 -m kernel snapshot file.mm (--at L1,L2 | --at-fraction 0.25,0.5) [--stor
 python3 -m kernel check file.mm --from-snapshot snapshots.json [--snap LABEL] [--spot K] [--seed S]
 python3 -m kernel.snapshot_measure path/to/set.mm [--repeats 3]   # by hand, not CI
 python3 -m kernel.snapshot_round2 path/to/set.mm [--loads 200]   # by hand, not CI
+python3 -m kernel.parse_cache_measure path/to/set.mm [--repeats 3]   # by hand, not CI
 
 snapshot    {theorem, statement, axioms_used (transitive, syntax axioms included),
              prefix_sha256 of the lines read through its proof, prefix_lines,
@@ -180,6 +181,16 @@ use         the prefix is re-read and hashed first; a different hash (any byte,
               unless listed in prefix_non_pass, which keep their verdict and reason)
             the statements after the prefix are verified
 saved       only proof checking: the prefix is still read, hashed and parsed
+            (with a parse cache, not parsed; still read and hashed)
+parse cache --cache-dir D: snapshot writes the prefix's parse state to D (marshal:
+            plain values, loading runs no code), keyed by (prefix_sha256, kernel
+            version) inside the file; the snapshot records the file's sha256.
+            check --from-snapshot --cache-dir D uses it only if the file exists,
+            hashes to the recorded sha256, reads, and carries the right key and
+            prefix shape; otherwise it is not used, the reason is printed, and the
+            prefix is parsed in full. Never a partial reuse. Re-verification from
+            a cache uses the context stored for that statement (its hypotheses,
+            $d pairs, variables, and only the assertions before it)
 limit       the store is plain JSON; a forged or edited record is not detected as
             such. Measured on set.mm (REFERENCES/kernel_snapshots_round2.md):
               forged PASS for the snapshot theorem: caught on every load
