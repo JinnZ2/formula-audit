@@ -761,6 +761,10 @@ Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (re
                 Note 2026-11-18: transcription verified as data against the relayed
                 file (426 fields, 0 differences; compared_as_data in the file). The
                 re-read against lojban.org is still open.
+                Note 2026-11-18, later: a partial re-read was relayed in (re_read in
+                the file; quotes extracted by a fetch tool, not bytes): 12 gismu
+                (17 rows) and the 11 evidentials match; 8 jbovlaste words (10 rows)
+                and the 3 no-word rows are UNVERIFIED. re_read_in_this_build: false.
 table vs        the place table is realigned to the reference, and is still PROPOSED:
 reference       a word's slots are the holder's to set. Union rule: a slot the table
                 already had is kept when a predicate of the reference carries that

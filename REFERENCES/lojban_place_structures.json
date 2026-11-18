@@ -10,8 +10,43 @@
   "rows": {"place_structures": 30, "evidentials": 11},
   "fields": 426,
   "differences": 0,
+  "excluded_fields": ["reread_status"],
+  "excluded_note": "reread_status was added to each row here on 2026-11-18, after the compare; the relayed file does not have it. The compare covers every other field.",
   "compared_on": "2026-11-18",
   "scope": "transcription only: this copy matches the relayed file. It is not a re-read against lojban.org; re_read_in_this_build stays false."
+ },
+ "re_read": {
+  "date": "2026-11-18",
+  "by": "chat Claude via fetch",
+  "relayed": "the result below was pasted into the build session by the repository owner; this build fetched nothing and did not see the fetched pages",
+  "depth": "EXTRACTED (model-relayed quotes from the fetch tool's extraction, not bytes)",
+  "sources": [
+   "https://lojban.org/publications/wordlists/gismu.txt",
+   "CLL section 13.11, evidentials (lojban.org)"
+  ],
+  "matched": {
+   "gismu": ["glare", "jibni", "kecti", "mapti", "mleca", "pendo", "snura", "xamgu", "xendo", "zmadu", "ckape", "bapli"],
+   "gismu_count": 12,
+   "gismu_rows": 17,
+   "evidentials": ["za'a", "ti'e", "ju'a", "ca'e", "pe'i", "ru'a", "ka'u", "se'o", "ja'o", "ba'a", "su'a"],
+   "evidential_rows": 11,
+   "differences_reported": "trailing periods only"
+  },
+  "unreachable": {
+   "source": "jbovlaste (robots-disallowed)",
+   "words": ["xagmau", "xagme'a", "xagrai", "xlarai", "tolba'i", "cmamau", "le'onmo", "capnu'e"],
+   "word_count": 8,
+   "rows": 10,
+   "status": "UNVERIFIED"
+  },
+  "void_rows": {
+   "english": ["efficient", "cold", "imminent"],
+   "rows": 3,
+   "status": "UNVERIFIED",
+   "reason": "each records that no Lojban word was found, from the jbovlaste listing; that absence was not re-read"
+  },
+  "row_field": "reread_status on every row: MATCH_EXTRACTED or UNVERIFIED",
+  "scope": "partial, and not byte-level. re_read_in_this_build stays false: 13 rows are open and nothing was compared as bytes."
  },
  "data": {
   "place_structures": [
@@ -29,7 +64,8 @@
      "xauzma",
      "zanmau",
      "xlame'a (better = less bad)"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "worse",
@@ -44,7 +80,8 @@
     "alternatives": [
      "xlamau",
      "mleca"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "best",
@@ -60,7 +97,8 @@
      "traji",
      "zanrai",
      "mecyxlarai (best = least bad)"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "worst",
@@ -75,7 +113,8 @@
     "alternatives": [
      "mecyxagrai (worst = least good; same wording)",
      "xlamau"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "appropriate",
@@ -90,7 +129,8 @@
     "alternatives": [
      "drani",
      "sarxe"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "superior",
@@ -106,7 +146,8 @@
      "xagmau (superior = better)",
      "traji",
      "banli"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "inferior",
@@ -121,7 +162,8 @@
     "alternatives": [
      "mleca",
      "xagme'a"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "more",
@@ -136,7 +178,8 @@
     "alternatives": [
      "za'u (cmavo: digit/number 'greater than')",
      "memymau (more in number)"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "less",
@@ -150,7 +193,8 @@
     "mapping_reason": "jbovlaste keys the gloss \"less\" to mleca; it is zmadu's direct antonym.",
     "alternatives": [
      "jdika (decreases)"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "greater",
@@ -165,7 +209,8 @@
     "alternatives": [
      "barda (big against norm x3)",
      "banli (subjectively great)"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "smaller",
@@ -181,7 +226,8 @@
      "brame'a (smaller = less big)",
      "mleca",
      "cmalu"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "optimal",
@@ -197,7 +243,8 @@
      "vamrai (optimal = most valuable for purpose)",
      "mansyrai (best satisfies)",
      "traji"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "efficient",
@@ -212,7 +259,8 @@
     "alternatives": [
      "tadji",
      "pilno"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "effective",
@@ -227,7 +275,8 @@
     "alternatives": [
      "snada (succeeds)",
      "jalge (result)"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "warm",
@@ -243,7 +292,8 @@
      "pendo",
      "dirba",
      "mligla (temperature sense only)"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "cold",
@@ -257,7 +307,8 @@
     "mapping_reason": "jbovlaste's \"cold\" glosses are temperature (lenku, tolkuflenku) or illness (zuKAM); nothing covers the emotive sense. A tolxendo (unkind) record exists but carries no English definition, so there is no quotable place structure. Not invented.",
     "alternatives": [
      "lenku (temperature sense only)"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "friendly",
@@ -272,7 +323,8 @@
     "alternatives": [
      "xendo",
      "nelci"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "hostile",
@@ -288,7 +340,8 @@
      "xebni (hates)",
      "fapro (opposes)",
      "bradi (enemy)"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "aggressive",
@@ -303,7 +356,8 @@
     "alternatives": [
      "gunta (commits aggression; non-emotive)",
      "le'o (attitudinal cmavo: aggressive)"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "compassionate",
@@ -318,7 +372,8 @@
     "alternatives": [
      "xendo",
      "cinmo"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "safe",
@@ -334,7 +389,8 @@
      "bandu (defends x2 from threat x3)",
      "marbi",
      "kajde"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "dangerous",
@@ -349,7 +405,8 @@
     "alternatives": [
      "kajde (warns of danger)",
      "xalni"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "threat",
@@ -365,7 +422,8 @@
      "selnu'e (threat as commitment/promise)",
      "ckape",
      "snura"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "imminent",
@@ -379,7 +437,8 @@
     "mapping_reason": "No valsi is glossed or keyworded \"imminent\" in jbovlaste. A bavlami record exists but carries no English definition, so nothing quotable; balvi is bare temporal ordering (future of x2), not imminence. Not invented.",
     "alternatives": [
      "balvi"
-    ]
+    ],
+    "reread_status": "UNVERIFIED"
    },
    {
     "english": "near",
@@ -395,7 +454,8 @@
      "zvajbi (located nearby)",
      "jbibi'o (approaches)",
      "lamji"
-    ]
+    ],
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "glare (recall check)",
@@ -408,7 +468,8 @@
     "mapping_status": "DIFFERS",
     "mapping_reason": "recalled: \"x1 hot by standard x2\" — source: \"x1 is hot/[warm] by standard x2.\" — same place count; recall drops \"is\" and the \"/[warm]\" variant (gismu list wording identical: \"x1 is hot/[warm] by standard x2\").",
     "alternatives": [],
-    "recalled_form": "x1 hot by standard x2"
+    "recalled_form": "x1 hot by standard x2",
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "snura (recall check)",
@@ -421,7 +482,8 @@
     "mapping_status": "DIFFERS",
     "mapping_reason": "recalled: \"x1 safe from threat x2\" — source: \"x1 is secure/safe from threat x2 (event).\" — same place count; recall drops \"is\", \"secure/\", and the \"(event)\" qualifier on x2.",
     "alternatives": [],
-    "recalled_form": "x1 safe from threat x2"
+    "recalled_form": "x1 safe from threat x2",
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "jibni (recall check)",
@@ -434,7 +496,8 @@
     "mapping_status": "DIFFERS",
     "mapping_reason": "recalled: \"x1 near x2 in property x3\" — source: \"x1 is near/close to/approximates x2 in property/quantity x3 (ka/ni).\" — same place count; recall drops \"is\", \"/close to/approximates\", \"/quantity\", and \"(ka/ni)\".",
     "alternatives": [],
-    "recalled_form": "x1 near x2 in property x3"
+    "recalled_form": "x1 near x2 in property x3",
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "zmadu (recall check)",
@@ -447,7 +510,8 @@
     "mapping_status": "DIFFERS",
     "mapping_reason": "recalled: \"x1 exceeds x2 in property x3 by amount x4\" — source: \"x1 exceeds/is more than x2 in property/quantity x3 (ka/ni) by amount/excess x4.\" — same place count; recall drops \"/is more than\", \"/quantity\", \"(ka/ni)\", and \"/excess\".",
     "alternatives": [],
-    "recalled_form": "x1 exceeds x2 in property x3 by amount x4"
+    "recalled_form": "x1 exceeds x2 in property x3 by amount x4",
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "xamgu (recall check)",
@@ -460,7 +524,8 @@
     "mapping_status": "DIFFERS",
     "mapping_reason": "recalled: \"x1 good for x2 by standard x3\" — source: \"x1 (object/event) is good/beneficial/nice/[acceptable] for x2 by standard x3.\" — same place count; recall drops \"(object/event)\", \"is\", and \"/beneficial/nice/[acceptable]\".",
     "alternatives": [],
-    "recalled_form": "x1 good for x2 by standard x3"
+    "recalled_form": "x1 good for x2 by standard x3",
+    "reread_status": "MATCH_EXTRACTED"
    }
   ],
   "evidentials": [
@@ -475,7 +540,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from zgana (observe).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I hear (hearsay)",
@@ -488,7 +554,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from tirna (hear).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I state",
@@ -501,7 +568,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from jufra (sentence).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I define",
@@ -514,7 +582,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; no rafsi source given in the CLL table.",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I opine",
@@ -527,7 +596,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from pensi (think).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I postulate",
@@ -540,7 +610,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from sruma (assume).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I know by cultural means",
@@ -553,7 +624,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from kulnu (culture).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I know by internal experience",
@@ -566,7 +638,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from senva (dream).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I conclude",
@@ -579,7 +652,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); gloss and defining sentence quoted verbatim; derived from jalge (result).",
     "alternatives": [],
-    "in_user_list": true
+    "in_user_list": true,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I expect / I experience / I remember",
@@ -592,7 +666,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); NOT in the requester's list — added per instruction 2. Gloss and defining sentence quoted verbatim; derived from balvi (future). Scalar: ba'a / ba'acu'i / ba'anai.",
     "alternatives": [],
-    "in_user_list": false
+    "in_user_list": false,
+    "reread_status": "MATCH_EXTRACTED"
    },
    {
     "english": "I generalize / I particularize",
@@ -605,7 +680,8 @@
     "mapping_status": "OBSERVED",
     "mapping_reason": "CLL §13.11 evidential (selma'o UI); NOT in the requester's list — added per instruction 2. Gloss and defining sentence quoted verbatim; derived from sucta (abstract). Scale opposite su'anai = abduction.",
     "alternatives": [],
-    "in_user_list": false
+    "in_user_list": false,
+    "reread_status": "MATCH_EXTRACTED"
    }
   ]
  }
