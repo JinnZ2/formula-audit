@@ -1,8 +1,8 @@
 """glyph/precursor.py: its own selftest, and the glyph table entry. Co-authored.
 
-The file is filed verbatim; its sha256 is pinned here. It is run with -m from
-the repository root: run as a script from inside glyph/, glyph/operator.py
-shadows the standard library's operator and the import fails.
+The file was filed verbatim (sha256 d2cdb8d71df9...); one line has changed
+since: its docstring's run line now reads "python3 -m glyph.precursor". The
+sha256 of the file as it stands is pinned here.
 """
 import hashlib
 import json
@@ -16,13 +16,13 @@ sys.path.insert(0, str(ROOT))
 
 from glyph import TABLE_V0  # noqa: E402
 from glyph.environment import read_event_log  # noqa: E402
-from glyph.operator import candidate_key  # noqa: E402
+from glyph.glyph_operator import candidate_key  # noqa: E402
 from glyph.precursor import check  # noqa: E402
 from glyph.tools import apply_tool  # noqa: E402
 from infer.ladder import Void  # noqa: E402
 from tests.test_glyph import Base  # noqa: E402
 
-SHA = "d2cdb8d71df9b9737b5a080a24e714f2c1f363a81f7140d6ce22e00654be7856"
+SHA = "d1eab08effbc5b4b40b24969797763abf99f31b54e630da3dd6117e8f9f5e537"
 DEC = {"tau": 3.0, "window": 4, "streak_limit": 3, "trend_limit": 0.5}
 FAILS = {"events": [{"t": t, "outcome": o} for t, o in
                     enumerate(["FAIL", "FAIL", "FAIL", "PASS"])], "declare": DEC}

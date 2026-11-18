@@ -1,4 +1,4 @@
-"""operator -- the glyph: one reasoning step at a time. Co-authored.
+"""glyph_operator -- the glyph: one reasoning step at a time. Co-authored.
 
 Definition: the README section "Glyph (branch 3 reasoning operator)".
 

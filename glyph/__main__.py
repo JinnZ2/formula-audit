@@ -15,7 +15,7 @@ from pathlib import Path
 from infer.ladder import Void, read_json, record_sha
 
 from .environment import read_record
-from .operator import run
+from .glyph_operator import run
 
 
 def ref_main(argv):
