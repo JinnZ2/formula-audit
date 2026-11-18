@@ -5,7 +5,8 @@ Co-authored. Observer slots null.
 
 ```text
 file        glyph/precursor.py, filed verbatim 2026-11-18
-sha256      d2cdb8d71df9b9737b5a080a24e714f2c1f363a81f7140d6ce22e00654be7856
+sha256      d2cdb8d71df9b9737b5a080a24e714f2c1f363a81f7140d6ce22e00654be7856   as filed; the runs below
+            d1eab08effbc5b4b40b24969797763abf99f31b54e630da3dd6117e8f9f5e537   since: docstring run line only
 run         Python 3.13.x, 2026-11-18, from the repository root
 ```
 

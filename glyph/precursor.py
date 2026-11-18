@@ -26,7 +26,7 @@ Input (dict):
             "state": number (optional), "target": str (optional)}]
   declare: {"tau": >0, "window": int>=3, "streak_limit": int>=1,
             "trend_limit": number in (0,1]}   (each optional; missing -> VOID part)
-Run: python3 precursor.py case.json   |   python3 precursor.py --selftest
+Run: python3 -m glyph.precursor case.json   |   python3 -m glyph.precursor --selftest
 """
 
 import json

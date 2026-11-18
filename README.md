@@ -616,7 +616,7 @@ precursor: read the slope before the peak
 case      event_log  {events: [{t, outcome PASS | FAIL | VOID, state?, target?}],
                       declare: {tau, window, streak_limit, trend_limit}}   each optional
                       |
-tool      glyph/precursor.py, filed verbatim (sha256 d2cdb8d71df9...), cost 1
+tool      glyph/precursor.py (sha256 d1eab08effbc...), cost 1
             carried state   each FAIL adds a pulse that decays with the declared tau
             precursor       trend of rolling variance and lag-1 autocorrelation of the
                             state signal: PRECURSOR (both rise) | WATCH (one) | NONE
@@ -632,9 +632,11 @@ python3 -m glyph.precursor --selftest        # 10 checks
 python3 -m glyph.precursor case.json         # case.json is the event_log table itself
 ```
 
-The file's own docstring says `python3 precursor.py`. From inside `glyph/` that
-fails at import: `glyph/operator.py` shadows the standard library's `operator`.
-The file is kept as delivered; run it with `-m` from the repository root.
+The file was filed verbatim (sha256 d2cdb8d71df9...). One line has changed since:
+the docstring's run line, from `python3 precursor.py` to `python3 -m glyph.precursor`.
+`glyph/operator.py`, which shadowed the standard library's `operator`, is now
+`glyph/glyph_operator.py`; a test keeps any module under `glyph/` or `kernel/` from
+taking a standard-library name.
 Measured operating points and sources: `REFERENCES/precursor_operating_curve.md`.
 
 Limits of the v0
