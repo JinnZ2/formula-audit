@@ -44,7 +44,10 @@ class TestReference(unittest.TestCase):
                          "524b80d6571221cd75dceef52a5dd4fc01c796e33723ae5982007cb059ab8daa")
         self.assertEqual(c["differences"], 0)
         self.assertEqual(c["rows"], {k: len(v) for k, v in DATA.items()})
-        self.assertEqual(c["fields"], sum(len(r) for rows in DATA.values() for r in rows))
+        added = set(c["excluded_fields"])                    # fields added here afterwards
+        self.assertEqual(added, {"reread_status"})
+        self.assertEqual(c["fields"], sum(len(set(r) - added)
+                                          for rows in DATA.values() for r in rows))
 
     def test_compare_again_when_the_relayed_file_is_beside_this_repository(self):
         import hashlib
@@ -63,11 +66,44 @@ class TestReference(unittest.TestCase):
         for sec in DATA:
             self.assertEqual(len(DATA[sec]), len(other[sec]))
             for x, y in zip(DATA[sec], other[sec]):
-                for k in sorted(set(x) | set(y)):
+                for k in sorted((set(x) | set(y)) - set(c["excluded_fields"])):
                     fields += 1
                     if k not in x or k not in y or x[k] != y[k] or type(x[k]) is not type(y[k]):
                         diffs += 1
         self.assertEqual((fields, diffs), (c["fields"], c["differences"]))
+
+    def test_partial_re_read(self):
+        # relayed result of a fetch: quotes extracted by a tool, not bytes; 8 words open
+        self.assertFalse(REF["re_read_in_this_build"])
+        r = REF["re_read"]
+        self.assertTrue(r["depth"].startswith("EXTRACTED"))
+        open_words = ["xagmau", "xagme'a", "xagrai", "xlarai", "tolba'i", "cmamau",
+                      "le'onmo", "capnu'e"]
+        self.assertEqual(r["unreachable"]["words"], open_words)
+        places = DATA["place_structures"]
+        for p in places + DATA["evidentials"]:
+            self.assertIn(p["reread_status"], ("MATCH_EXTRACTED", "UNVERIFIED"))
+        for w in open_words:                                 # the 8 words: every row UNVERIFIED
+            rows = [p for p in places if p["gismu"] == w]
+            self.assertTrue(rows)
+            for p in rows:
+                self.assertEqual(p["reread_status"], "UNVERIFIED")
+        self.assertEqual(sum(1 for p in places if p["gismu"] in open_words),
+                         r["unreachable"]["rows"])
+        for p in places:                                     # no word found: absence not re-read
+            if p["gismu"] is None:
+                self.assertEqual(p["reread_status"], "UNVERIFIED")
+        matched = [p for p in places if p["reread_status"] == "MATCH_EXTRACTED"]
+        self.assertEqual({p["gismu"] for p in matched}, set(r["matched"]["gismu"]))
+        self.assertEqual((len(r["matched"]["gismu"]), len(matched)),
+                         (r["matched"]["gismu_count"], r["matched"]["gismu_rows"]))
+        self.assertEqual([e["gismu"] for e in DATA["evidentials"]], r["matched"]["evidentials"])
+        for e in DATA["evidentials"]:
+            self.assertEqual(e["reread_status"], "MATCH_EXTRACTED")
+        # what the place table's hostile and better rest on is still relayed only
+        self.assertEqual(BY["hostile"]["reread_status"], "UNVERIFIED")
+        self.assertEqual(BY["aggressive"]["reread_status"], "UNVERIFIED")
+        self.assertEqual(BY["better"]["reread_status"], "UNVERIFIED")
 
     def test_recall_checks(self):
         checks = [p for p in DATA["place_structures"] if p["class"] == "recall_check"]
