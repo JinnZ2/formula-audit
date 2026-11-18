@@ -10,6 +10,10 @@ python3 -m kernel snapshot file.mm (--at L1,L2 | --at-fraction 0.25,0.5)
   --spot K      with --from-snapshot: re-verify K prefix theorems drawn at random
                 (default 25) besides the snapshot theorem, which is always re-verified
   --seed S      the draw's seed (default: fresh, and printed)
+  --cache-dir D with snapshot: also write each snapshot's parse cache to D and
+                record the cache file's sha256 in it; with check --from-snapshot:
+                look for the cache in D. A cache that fails any check is not used
+                (the reason is printed) and the prefix is parsed in full.
   A stopped run says so; what was not read has no verdict.
   --from-snapshot STORE   re-read and hash the snapshot's prefix; if it matches,
                 carry the prefix's verdicts and verify only what comes after.
@@ -107,6 +111,7 @@ def main(argv):
         spot = _opt(argv, "--spot", int)
         seed = _opt(argv, "--seed", int)
         spot_kw = {"spot": 25 if spot is None else spot, "seed": seed}
+        cache_dir = _opt(argv, "--cache-dir")
         kw = {}
         for flag, key, conv in (("--limit", "limit", int), ("--until", "until", str),
                                 ("--seconds", "seconds", float)):
@@ -118,7 +123,8 @@ def main(argv):
         return 2
     try:
         if argv[0] == "snapshot":
-            written, refused, rep = snap.write(argv[1], labels, fracs, store, start)
+            written, refused, rep = snap.write(argv[1], labels, fracs, store, start,
+                                               cache_dir=cache_dir, **spot_kw)
             for r in written:
                 print(f"written {r['theorem']} (index {r['theorem_index']}, lines "
                       f"{r['prefix_lines']}, sha256 {r['prefix_sha256'][:16]}, axioms used "
@@ -128,7 +134,7 @@ def main(argv):
             if rep.get("snapshot") and rep["snapshot"]["state"] == "VOID":
                 return 3
             return 1 if refused else 0
-        rep, _db = run_file(argv[1], snapshot=start, **spot_kw, **kw)
+        rep, _db = run_file(argv[1], snapshot=start, cache_dir=cache_dir, **spot_kw, **kw)
     except OSError as e:
         print(f"cannot read {argv[1]}: {e}", file=sys.stderr)
         return 2
@@ -150,6 +156,10 @@ def main(argv):
                   " -- nothing after this point was read")
         if rep["stopped"]:
             print(f"stopped: {rep['stopped']} -- the rest of the file was not read")
+        if rep.get("parse_cache"):
+            pc = rep["parse_cache"]
+            print(f"parse cache {pc['file']}: " + ("used" if pc["used"] else
+                  f"not used ({pc['reason']}); prefix parsed in full"))
         if rep.get("snapshot"):
             s = rep["snapshot"]
             if s.get("spot"):

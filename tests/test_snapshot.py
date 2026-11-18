@@ -328,3 +328,80 @@ class TestStoreAndCli(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestParseCache(Base):
+    def setUp(self):
+        super().setUp()
+        self.p = self.db(many(30))
+        written, _, _ = snap.write(self.p, ["t20"], store=self.store, cache_dir=self.d)
+        self.rec = written[0]
+
+    def V(self, rep):
+        return {r["label"]: (r["verdict"], tuple(r["rests_on_non_pass"]), r["verified_here"])
+                for r in rep["theorem_records"]}
+
+    def test_recorded_and_used_with_identical_verdicts(self):
+        pc = self.rec["parse_cache"]
+        self.assertEqual(pc["key"], [self.rec["prefix_sha256"], VERSION])
+        self.assertTrue((self.d / pc["file"]).exists())
+        for spot in (0, 4, 25):
+            a, _ = run_file(self.p, snapshot=self.rec, spot=spot, seed=3, cache_dir=self.d)
+            b, _ = run_file(self.p, snapshot=self.rec, spot=spot, seed=3)
+            self.assertTrue(a["parse_cache"]["used"])
+            self.assertIsNone(b["parse_cache"])
+            self.assertEqual(self.V(a), self.V(b))
+            self.assertEqual(a["snapshot"]["spot"]["checked"], b["snapshot"]["spot"]["checked"])
+
+    def mismatch(self, rec):
+        a, _ = run_file(self.p, snapshot=rec, spot=4, seed=3, cache_dir=self.d)
+        b, _ = run_file(self.p, snapshot=rec, spot=4, seed=3)
+        self.assertFalse(a["parse_cache"]["used"])
+        self.assertEqual(self.V(a), self.V(b))           # full parse, same verdicts
+        return a["parse_cache"]["reason"]
+
+    def test_any_mismatch_means_full_parse(self):
+        import hashlib
+        import marshal
+        f = self.d / self.rec["parse_cache"]["file"]
+        self.assertIn("names no parse cache", self.mismatch(dict(self.rec, parse_cache=None)))
+        self.assertIn("No such file", self.mismatch(
+            dict(self.rec, parse_cache=dict(self.rec["parse_cache"], file="gone.cache"))))
+        good = f.read_bytes()
+        bad = bytearray(good)
+        bad[len(bad) // 2] ^= 1
+        f.write_bytes(bytes(bad))
+        self.assertIn("sha256 is not the one", self.mismatch(self.rec))
+        f.write_bytes(good)
+        blob = marshal.loads(good)
+        for key, want in (([blob["key"][0], "kernel other"], "key"),
+                          (["0" * 64, VERSION], "key")):
+            raw = marshal.dumps(dict(blob, key=key), 4)
+            (self.d / "x.cache").write_bytes(raw)
+            rec = dict(self.rec, parse_cache={"file": "x.cache",
+                                              "sha256": hashlib.sha256(raw).hexdigest()})
+            self.assertIn(want, self.mismatch(rec))
+        raw = b"not marshal"
+        (self.d / "y.cache").write_bytes(raw)
+        rec = dict(self.rec, parse_cache={"file": "y.cache",
+                                          "sha256": hashlib.sha256(raw).hexdigest()})
+        self.assertIn("unreadable", self.mismatch(rec))
+
+    def test_forged_snapshot_theorem_still_void_with_cache(self):
+        bad = self.db(many(30, 20), "bad.mm")
+        rec = dict(self.rec, statement="|- ( P -> Q )",
+                   prefix_sha256=prefix_sha256(bad, self.rec["prefix_lines"]))
+        rep, _ = run_file(bad, snapshot=rec, spot=0, cache_dir=self.d)
+        self.assertFalse(rep["parse_cache"]["used"])     # cache key is the honest hash
+        self.assertEqual(rep["snapshot"]["state"], "VOID")
+
+    def test_statements_after_the_prefix_on_its_last_line(self):
+        text = many(5) + "t6 $p |- ( P -> P ) $= " + IDC + " $. t7 $p |- ( P -> P ) $= " \
+            + IDC + " $.\n"
+        p = self.db(text, "same.mm")
+        w, _, _ = snap.write(p, ["t6"], store=self.store, cache_dir=self.d)
+        a, _ = run_file(p, snapshot=w[0], spot=0, cache_dir=self.d)
+        self.assertTrue(a["parse_cache"]["used"])
+        self.assertEqual([r["label"] for r in a["theorem_records"]],
+                         ["t1", "t2", "t3", "t4", "t5", "t6", "t7"])
+        self.assertTrue(a["theorem_records"][-1]["verified_here"])

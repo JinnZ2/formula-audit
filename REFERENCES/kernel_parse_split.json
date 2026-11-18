@@ -1,0 +1,43 @@
+{
+ "snapshot": "wl-sbcom2d-lem2",
+ "index": 36293,
+ "prefix_lines": 627075,
+ "median": {
+  "tokens_prefix": 3528875,
+  "a_tokenize_prefix": 0.669,
+  "b_records": 0.201,
+  "c_cited": 0.257,
+  "parse": 4.049,
+  "verify": 5.26,
+  "rest": 2.787
+ },
+ "runs": [
+  {
+   "tokens_prefix": 3528875,
+   "a_tokenize_prefix": 0.669,
+   "b_records": 0.201,
+   "c_cited": 0.262,
+   "parse": 4.078,
+   "verify": 5.184,
+   "rest": 2.946
+  },
+  {
+   "tokens_prefix": 3528875,
+   "a_tokenize_prefix": 0.689,
+   "b_records": 0.315,
+   "c_cited": 0.257,
+   "parse": 4.049,
+   "verify": 5.7,
+   "rest": 2.787
+  },
+  {
+   "tokens_prefix": 3528875,
+   "a_tokenize_prefix": 0.646,
+   "b_records": 0.176,
+   "c_cited": 0.236,
+   "parse": 3.77,
+   "verify": 5.26,
+   "rest": 2.711
+  }
+ ]
+}

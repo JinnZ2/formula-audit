@@ -1,0 +1,147 @@
+{
+ "input": "set.mm",
+ "repeats": 3,
+ "cpus": 4,
+ "human_interest": null,
+ "ai_interest": null,
+ "write_seconds": 22.93,
+ "write_refused": [],
+ "full": {
+  "median": 18.54,
+  "seconds": [
+   18.54,
+   17.99,
+   18.66
+  ],
+  "load_1min_before": [
+   0.44,
+   0.57,
+   0.69
+  ]
+ },
+ "cuts": [
+  {
+   "theorem": "1lt9",
+   "index": 12098,
+   "cache_bytes": 7854720,
+   "cache_sha256": "cd8e57c3a774e5a2800c5692d8c594dd46785fd64d7a3adcf6764a674b7135e7",
+   "snapshot": {
+    "median": 17.3,
+    "seconds": [
+     17.63,
+     17.3,
+     16.93
+    ],
+    "load_1min_before": [
+     0.78,
+     0.83,
+     0.88
+    ]
+   },
+   "snapshot_cache": {
+    "median": 16.62,
+    "seconds": [
+     16.54,
+     16.74,
+     16.62
+    ],
+    "load_1min_before": [
+     0.91,
+     0.93,
+     0.95
+    ]
+   },
+   "cache_used": true,
+   "cache_load_seconds": 0.116,
+   "identical_snapshot": true,
+   "identical_snapshot_cache": true,
+   "statements": 48391
+  },
+  {
+   "theorem": "reipcl",
+   "index": 24196,
+   "cache_bytes": 23599619,
+   "cache_sha256": "9e215465ba2d36e7aa7a4c98d96e04eb4ab6f50867d1c7d6eb1e6951f200c7ef",
+   "snapshot": {
+    "median": 14.37,
+    "seconds": [
+     13.6,
+     14.93,
+     14.37
+    ],
+    "load_1min_before": [
+     0.96,
+     0.97,
+     0.98
+    ]
+   },
+   "snapshot_cache": {
+    "median": 13.83,
+    "seconds": [
+     13.83,
+     14.29,
+     13.36
+    ],
+    "load_1min_before": [
+     0.98,
+     0.99,
+     0.99
+    ]
+   },
+   "cache_used": true,
+   "cache_load_seconds": 0.382,
+   "identical_snapshot": true,
+   "identical_snapshot_cache": true,
+   "statements": 48391
+  },
+  {
+   "theorem": "wl-sbcom2d-lem2",
+   "index": 36293,
+   "cache_bytes": 42550634,
+   "cache_sha256": "3e307b4a83e8afd7dc830a6ca7a093e40b3255029e82bd3b7c6ccdeeabb8ec64",
+   "snapshot": {
+    "median": 9.43,
+    "seconds": [
+     9.28,
+     9.75,
+     9.43
+    ],
+    "load_1min_before": [
+     0.99,
+     0.99,
+     1.0
+    ]
+   },
+   "snapshot_cache": {
+    "median": 8.03,
+    "seconds": [
+     8.03,
+     8.06,
+     7.46
+    ],
+    "load_1min_before": [
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   "cache_used": true,
+   "cache_load_seconds": 0.512,
+   "identical_snapshot": true,
+   "identical_snapshot_cache": true,
+   "statements": 48391
+  }
+ ],
+ "mismatch": {
+  "edited_byte": {
+   "used": false,
+   "reason": "cache file 03ef2686fd190e84386c0d797e05835d491fc6e08b635f17763600b5e0f4a1b6.kernel-branch2a-0.cache: sha256 is not the one the snapshot records",
+   "identical": true
+  },
+  "cache_keyed_to_other_kernel": {
+   "used": false,
+   "reason": "cache file rekeyed.cache: key ['f6787d7c592f58ea63d48d5d02167a5296c22904bf9c5734fffbd727d2d832c9', 'kernel other'] is not [f6787d7c592f58ea63d48d5d02167a5296c22904bf9c5734fffbd727d2d832c9, kernel branch2a-0]",
+   "identical": true
+  }
+ }
+}

@@ -43,6 +43,7 @@ verdict. VOID has no status.
 import hashlib
 import random
 import secrets
+import sys
 import time
 
 KEYWORDS = {"$c", "$v", "$f", "$e", "$d", "$a", "$p", "$.", "$=", "$(", "$)",
@@ -111,18 +112,30 @@ class Database:
         self.carry = None           # a loaded snapshot: prefix theorems are not re-verified
         self.t_verify = 0.0         # seconds spent checking proofs (profile)
         self.t_hash = 0.0           # seconds spent hashing lines read (profile)
+        self.t_cite = 0.0           # carried: reading cited labels from proof text
+        self.capture = None         # parse_cache.Capture while writing a cache
+        self.first_line, self.skip_tokens = 1, 0   # resume point (parse cache)
+        self.tok_in_line = 0
+        self.t_record = 0.0         # carried: building the record
 
     # ---- tokens -------------------------------------------------------
     def _raw(self, lines):
         if self.hashing:
             self._hash = hashlib.sha256()
-        for n, line in enumerate(lines, 1):
+        first, skip = self.first_line, self.skip_tokens
+        for n, line in enumerate(lines, first):
             self.line = n
             if self._hash is not None:
                 th = time.perf_counter()
                 self._hash.update(line.encode("utf-8"))
                 self.t_hash += time.perf_counter() - th
-            for tok in line.split():
+            toks = line.split()
+            self.tok_in_line = 0
+            if n == first and skip:
+                toks = toks[skip:]
+                self.tok_in_line = skip
+            for tok in toks:
+                self.tok_in_line += 1
                 yield tok
 
     def _tokens(self, lines):
@@ -277,6 +290,8 @@ class Database:
                             raise
                         a = self._make_assertion(label, "p", tuple(expr), line)
                         c, pos = self.carry, len(self.theorems) + 1
+                        if self.capture is not None:
+                            self.capture.context(self, a, proof)
                         if c is None or pos > c["index"]:
                             self._verify(a, proof)
                         elif pos == c["index"] or pos in c["spot"]:
@@ -286,6 +301,9 @@ class Database:
                         self.assertions[label] = a
                         if self._hash is not None:
                             self.digest_at[label] = (self.line, self._hash.copy().hexdigest())
+                        if self.capture is not None and (pos in self.capture.positions
+                                                         or label in self.capture.labels):
+                            self.capture.state(self, label)
                         if limit is not None and len(self.theorems) >= limit:
                             self.stopped = f"limit of {limit} provable statements reached"
                             break
@@ -304,13 +322,16 @@ class Database:
             self.file_void = {"reason": f"internal: {type(e).__name__}: {e}", "line": self.line}
         if self.file_void is not None and self.carry is not None and \
                 len(self.theorems) <= self.carry["index"]:
-            # the snapshot was never confirmed in place: nothing carried stands
-            for r in self.theorems:
-                if not r["verified_here"]:
-                    r.update(verdict="VOID", status=None, located_error=None,
-                             void_reason="carried from a snapshot that did not match in place")
-                    self.verdict_of[r["label"]] = "VOID"
+            self.void_carried()
         return self
+
+    def void_carried(self):
+        """The snapshot was never confirmed in place: nothing carried stands."""
+        for r in self.theorems:
+            if not r["verified_here"]:
+                r.update(verdict="VOID", status=None, located_error=None,
+                         void_reason="carried from a snapshot that did not match in place")
+                self.verdict_of[r["label"]] = "VOID"
 
     # ---- proofs ---------------------------------------------------------
     def _record(self, label, line, verdict, fmt=None, steps=None, fail=None, void_reason=None,
@@ -369,6 +390,7 @@ class Database:
         snapshot's (PASS unless the snapshot lists it as not PASS). The labels it
         cites are read from the proof text, not from checked steps."""
         c = self.carry
+        t1 = time.perf_counter()
         fmt = "compressed" if proof and proof[0] == "(" else "normal"
         if fmt == "compressed":
             cited = proof[1:proof.index(")")] if ")" in proof else []
@@ -376,14 +398,17 @@ class Database:
             cited = proof
         used = {t for t in cited if t in self.assertions}
         self.used_of[a.label] = used
+        t2 = time.perf_counter()
+        self.t_cite += t2 - t1
         np = c["non_pass"].get(a.label)
         verdict = "PASS" if np is None else np["verdict"]
         rests = {u for u in used if self.verdict_of.get(u, "PASS") != "PASS"}
         self._record(a.label, a.line, verdict, fmt, None, rests=rests, carried=c["label"],
                      located=None if np is None else np.get("located_error"),
                      void_reason=None if np is None else np.get("void_reason"))
+        self.t_record += time.perf_counter() - t2
 
-    def _recheck(self, a, proof, pos):
+    def _recheck(self, a, proof, pos, ctx=None):
         """A prefix theorem verified anyway: the snapshot theorem always, plus the
         spot sample. A verdict other than the one the snapshot carries makes the
         run VOID, naming the theorem."""
@@ -392,7 +417,7 @@ class Database:
                                   or a.stmt != tuple(c["statement"].split())):
             raise FileVoid(f"snapshot {c['label']}: the statement at its position "
                            f"is {a.label} {_text(a.stmt)}", self.line)
-        self._verify(a, proof)
+        self._verify(a, proof, ctx)
         rec = self.theorems[-1]
         np = c["non_pass"].get(a.label)
         expected = "PASS" if pos == c["index"] or np is None else np["verdict"]
@@ -422,14 +447,14 @@ class Database:
                 todo.extend(self.used_of.get(x, ()))
         return sorted(out)
 
-    def _verify(self, a, proof):
+    def _verify(self, a, proof, ctx=None):
         tv = time.perf_counter()
         try:
-            self._verify1(a, proof)
+            self._verify1(a, proof, ctx)
         finally:
             self.t_verify += time.perf_counter() - tv
 
-    def _verify1(self, a, proof):
+    def _verify1(self, a, proof, ctx=None):
         fmt = "compressed" if proof and proof[0] == "(" else "normal"
         used, count = set(), 0
         self.used_of[a.label] = used
@@ -442,8 +467,11 @@ class Database:
                 if "?" in proof:
                     raise ProofVoid("incomplete proof: ? step")
                 steps = proof
-            cur_dv = set().union(*[fr.d for fr in self.frames])
-            active_v, hyps, asserts = self.active_v, self.active_hyps, self.assertions
+            if ctx is None:
+                cur_dv = set().union(*[fr.d for fr in self.frames])
+                active_v, hyps, asserts = self.active_v, self.active_hyps, self.assertions
+            else:                          # re-verifying from a parse cache
+                active_v, hyps, cur_dv, asserts = ctx
             stack, saved = [], []
             for st in steps:
                 if st.__class__ is tuple:
@@ -605,19 +633,30 @@ def make_carry(snapshot, spot=25, seed=None):
             "k": spot, "seed": seed, "spot": spot_sample(idx, spot, seed), "checked": []}
 
 
-def run_file(path, hashing=False, snapshot=None, spot=25, seed=None, **kw):
+def run_file(path, hashing=False, snapshot=None, spot=25, seed=None, cache_dir=None,
+             capture=None, **kw):
     """snapshot: a snapshot record (kernel/snapshot.py). Its prefix is re-read and
     hashed first; a different hash or kernel version makes the run VOID, with
     nothing verified. Otherwise the snapshot theorem is re-verified, `spot` other
     prefix theorems drawn with `seed` (fresh and logged when None) are
-    re-verified, and the rest of the prefix is carried."""
+    re-verified, and the rest of the prefix is carried.
+    cache_dir: look there for the snapshot's parse cache (kernel/parse_cache.py).
+    A cache that fails any check is not used; the prefix is then parsed in full
+    and the reason is in report["parse_cache"]."""
     t0 = time.perf_counter()
     db = Database()
     db.hashing = hashing
+    db.capture = capture
     db.t_precheck = 0.0
+    cache_note = None
     try:
-        if snapshot is not None:
+        if snapshot is None:
+            with open(path, encoding="utf-8", errors="strict", newline="") as f:
+                db.read(f, **kw)
+        else:
             why = None
+            with open(path, encoding="utf-8", errors="strict", newline="") as f:
+                lines = list(f)
             if snapshot.get("kernel_version") != VERSION:
                 why = (f"snapshot {snapshot.get('theorem')}: kernel version "
                        f"{snapshot.get('kernel_version')!r}, this kernel is {VERSION!r}")
@@ -625,11 +664,15 @@ def run_file(path, hashing=False, snapshot=None, spot=25, seed=None, **kw):
                 why = f"snapshot {snapshot.get('theorem')}: its verdict is not PASS"
             else:
                 tp = time.perf_counter()
-                ok = prefix_sha256(path, snapshot["prefix_lines"]) == snapshot["prefix_sha256"]
+                n = snapshot["prefix_lines"]
+                h = hashlib.sha256()
+                for ln in lines[:n]:
+                    h.update(ln.encode("utf-8"))
+                ok = len(lines) >= n and h.hexdigest() == snapshot["prefix_sha256"]
                 db.t_precheck = time.perf_counter() - tp
-            if why is None and not ok:
-                why = (f"snapshot {snapshot['theorem']}: the first "
-                       f"{snapshot['prefix_lines']} lines do not hash to the stored sha256")
+                if not ok:
+                    why = (f"snapshot {snapshot['theorem']}: the first "
+                           f"{snapshot['prefix_lines']} lines do not hash to the stored sha256")
             if why is not None:
                 db.file_void = {"reason": why, "line": None}
                 rep = db.report(str(path), time.perf_counter() - t0)
@@ -637,8 +680,27 @@ def run_file(path, hashing=False, snapshot=None, spot=25, seed=None, **kw):
                                    "reason": why}
                 return rep, db
             db.carry = make_carry(snapshot, spot, seed)
-        with open(path, encoding="utf-8", errors="strict", newline="") as f:
-            db.read(f, **kw)
+            blob = None
+            if cache_dir is not None:
+                from . import parse_cache
+                tc = time.perf_counter()
+                blob, why_not = parse_cache.load(cache_dir, snapshot, VERSION)
+                cache_note = {"used": blob is not None, "reason": why_not,
+                              "file": (snapshot.get("parse_cache") or {}).get("file"),
+                              "load_seconds": round(time.perf_counter() - tc, 3)}
+            if blob is None:
+                db.read(lines, **kw)
+            else:
+                try:
+                    parse_cache.restore(db, blob, sys.modules[__name__])
+                except FileVoid as e:
+                    db.file_void = {"reason": e.reason, "line": e.line}
+                if db.file_void is None:
+                    db.read(lines[blob["prefix_lines"] - 1:], **kw)
+                else:
+                    db.void_carried()
     except UnicodeDecodeError as e:
         db.file_void = {"reason": f"not UTF-8 / ASCII text: {e.reason}", "line": None}
-    return db.report(str(path), time.perf_counter() - t0), db
+    rep = db.report(str(path), time.perf_counter() - t0)
+    rep["parse_cache"] = cache_note
+    return rep, db
