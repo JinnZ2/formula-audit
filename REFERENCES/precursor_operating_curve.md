@@ -9,17 +9,46 @@ sha256      d2cdb8d71df9b9737b5a080a24e714f2c1f363a81f7140d6ce22e00654be7856
 run         Python 3.13.x, 2026-11-18, from the repository root
 ```
 
-## The table named in the filing order
+## The delivered table
 
-VOID: not delivered. The order of 2026-11-18 says "the table above + seeds";
-the message that carried the order holds the file and no table. Nothing is
-put in its place under that name. The table below is a different thing: the
-same construction as the file's own selftest, run here over a range of
-`trend_limit`.
+Delivered 2026-11-18, after the filing order (the order said "the table
+above" and carried none; the table arrived in the next message). Kept as
+delivered: 60-point series, 200 seeds each, counts of the PRECURSOR flag.
 
-## Measured here
+```text
+window  limit  planted caught  white-noise false alarms
+ 4-16   0.5     0-30            0-1
+ 20     0.5     46              3
+ 20     0.3     87              12
+ 30     0.5     79              8
+ 30     0.3     120             20
+```
 
-Two signals, 100 runs each, 60 points, `window` 30, `tau` 3.0,
+Re-run here on the filed code, seeds 0 .. 199 (planted) and 10000 .. 10199
+(white noise): every row reproduces exactly.
+
+```text
+window  limit  planted  white        window  limit  planted  white
+ 4      0.5      0       0            20     0.5     46       3
+ 8      0.5      1       0            20     0.3     87      12
+12      0.5      7       0            30     0.5     79       8
+16      0.5     30       1            30     0.3    120      20
+```
+
+Delivered readings, carried: short windows are blind; detection needs about
+half the series as the window; the limit trades catches for false alarms.
+"Early-warning signals need long series" is carried as known in the
+literature: VERIFY. The selftest asserts the rate at window 30, limit 0.5
+(catches at least 3 times the false alarms over its first 100 seeds), not a
+single case.
+
+Build error, carried from the delivery: the first planted signal alternated
+sign, so its autocorrelation fell and it was no precursor. It was replaced by
+the AR(1) signal whose memory grows.
+
+## A second sweep, measured here
+
+Three flag states over `trend_limit`, the first 100 seeds only. Two signals, 100 runs each, 60 points, `window` 30, `tau` 3.0,
 `streak_limit` 3. Counts of the precursor flag out of 100.
 
 ```text
