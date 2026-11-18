@@ -18,6 +18,9 @@ TABLE = json.loads((ROOT / "wordslots" / "places.json").read_text())["words"]
 BY = {p["english"]: p for p in DATA["place_structures"]}
 
 
+JBOVLASTE_WORDS = ["xagmau", "xagme'a", "xagrai", "xlarai", "tolba'i", "cmamau",
+                   "le'onmo", "capnu'e"]
+
 class TestReference(unittest.TestCase):
     def test_shape(self):
         self.assertFalse(REF["re_read_in_this_build"])
@@ -73,37 +76,49 @@ class TestReference(unittest.TestCase):
         self.assertEqual((fields, diffs), (c["fields"], c["differences"]))
 
     def test_partial_re_read(self):
-        # relayed result of a fetch: quotes extracted by a tool, not bytes; 8 words open
+        # the first relayed re-read (extracted quotes; 8 words open) is kept as a record
         self.assertFalse(REF["re_read_in_this_build"])
         r = REF["re_read"]
         self.assertTrue(r["depth"].startswith("EXTRACTED"))
-        open_words = ["xagmau", "xagme'a", "xagrai", "xlarai", "tolba'i", "cmamau",
-                      "le'onmo", "capnu'e"]
-        self.assertEqual(r["unreachable"]["words"], open_words)
+        self.assertEqual(r["unreachable"]["words"], JBOVLASTE_WORDS)
+        self.assertEqual(r["matched"]["gismu_rows"], 17)
+
+    def test_all_rows_re_read(self):
+        # every row re-read by someone, at the depth its status names; nothing fetched here
+        self.assertFalse(REF["re_read_in_this_build"])
+        self.assertIs(REF["all_rows_reread"], True)
+        r = REF["re_read_2"]
+        routes = r["routes"]
         places = DATA["place_structures"]
+        got = {}
         for p in places + DATA["evidentials"]:
-            self.assertIn(p["reread_status"], ("MATCH_EXTRACTED", "UNVERIFIED"))
-        for w in open_words:                                 # the 8 words: every row UNVERIFIED
-            rows = [p for p in places if p["gismu"] == w]
-            self.assertTrue(rows)
-            for p in rows:
-                self.assertEqual(p["reread_status"], "UNVERIFIED")
-        self.assertEqual(sum(1 for p in places if p["gismu"] in open_words),
-                         r["unreachable"]["rows"])
-        for p in places:                                     # no word found: absence not re-read
+            got[p["reread_status"]] = got.get(p["reread_status"], 0) + 1
+        want = dict(r["per_depth_counts"])
+        self.assertEqual(want.pop("total"), len(places) + len(DATA["evidentials"]))
+        self.assertEqual(want.pop("UNVERIFIED"), 0)
+        self.assertEqual(got, want)
+        for p in places:
             if p["gismu"] is None:
-                self.assertEqual(p["reread_status"], "UNVERIFIED")
-        matched = [p for p in places if p["reread_status"] == "MATCH_EXTRACTED"]
-        self.assertEqual({p["gismu"] for p in matched}, set(r["matched"]["gismu"]))
-        self.assertEqual((len(r["matched"]["gismu"]), len(matched)),
-                         (r["matched"]["gismu_count"], r["matched"]["gismu_rows"]))
-        self.assertEqual([e["gismu"] for e in DATA["evidentials"]], r["matched"]["evidentials"])
+                self.assertEqual(p["reread_status"], "ABSENCE_CONFIRMED_GLOSS_ONLY")
+            elif p["gismu"] in JBOVLASTE_WORDS:
+                self.assertEqual(p["reread_status"], "MATCH_BROWSER")
+            else:
+                self.assertEqual(p["reread_status"], "MATCH_BYTES")
+                self.assertIn(p["gismu"], REF["re_read"]["matched"]["gismu"])
         for e in DATA["evidentials"]:
             self.assertEqual(e["reread_status"], "MATCH_EXTRACTED")
-        # what the place table's hostile and better rest on is still relayed only
-        self.assertEqual(BY["hostile"]["reread_status"], "UNVERIFIED")
-        self.assertEqual(BY["aggressive"]["reread_status"], "UNVERIFIED")
-        self.assertEqual(BY["better"]["reread_status"], "UNVERIFIED")
+        self.assertEqual(routes["MATCH_BROWSER"]["words"], JBOVLASTE_WORDS)
+        self.assertEqual(sorted(p["english"] for p in places if p["gismu"] is None),
+                         sorted(routes["ABSENCE_CONFIRMED_GLOSS_ONLY"]["english"]))
+        self.assertIn("exact gloss-word", routes["ABSENCE_CONFIRMED_GLOSS_ONLY"]["scope"])
+        for k in ("MATCH_BYTES", "MATCH_BROWSER", "ABSENCE_CONFIRMED_GLOSS_ONLY", "MATCH_EXTRACTED"):
+            self.assertEqual(routes[k]["rows"], got[k])
+        b = routes["MATCH_BYTES"]
+        self.assertEqual((len(b["file_sha256"]), b["file_bytes"]), (64, 368403))
+        self.assertIs(b["file_in_this_repository"], False)
+        self.assertEqual([o["word"] for o in r["open"]], ["mligla"])
+        self.assertEqual(BY["hostile"]["reread_status"], "MATCH_BROWSER")
+        self.assertEqual(BY["better"]["reread_status"], "MATCH_BROWSER")
 
     def test_recall_checks(self):
         checks = [p for p in DATA["place_structures"] if p["class"] == "recall_check"]

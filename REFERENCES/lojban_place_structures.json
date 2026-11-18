@@ -48,6 +48,88 @@
   "row_field": "reread_status on every row: MATCH_EXTRACTED or UNVERIFIED",
   "scope": "partial, and not byte-level. re_read_in_this_build stays false: 13 rows are open and nothing was compared as bytes."
  },
+ "all_rows_reread": true,
+ "re_read_2": {
+  "date": "2026-11-18",
+  "relayed": "the results below were pasted into the build session by the repository owner; this build fetched nothing, did not see the pages, and does not hold gismu.txt",
+  "routes": {
+   "MATCH_BYTES": {
+    "rows": 17,
+    "gismu_count": 12,
+    "source": "https://lojban.org/publications/wordlists/gismu.txt",
+    "file_sha256": "f2fc4cff4f265ad02717d56733b4627ffa78c616db78dcaa44caab694e1dd5b7",
+    "file_bytes": 368403,
+    "file_header": "gismu list 9/26/94 ... rafsi list baselined",
+    "file_last_modified": "2005-06-28",
+    "by": "chat Claude (file as received) and Manus (download); same sha256 from both routes",
+    "result": "12/12 place structures byte-literal match",
+    "file_in_this_repository": false
+   },
+   "MATCH_BROWSER": {
+    "rows": 10,
+    "word_count": 8,
+    "words": [
+     "xagmau",
+     "xagme'a",
+     "xagrai",
+     "xlarai",
+     "tolba'i",
+     "cmamau",
+     "le'onmo",
+     "capnu'e"
+    ],
+    "source": "jbovlaste (jbovlaste.lojban.org), read in a browser",
+    "by": "Manus",
+    "when": "2026-11-18, 15:48-15:50 UTC",
+    "result": "8/8 words match",
+    "def_ids_relayed": {
+     "xagrai": {
+      "best": 18579,
+      "optimal": 18042
+     }
+    },
+    "page_urls_and_other_def_ids": "recorded by Manus per row; not relayed to this build, so not written here",
+    "notes": [
+     "cmamau: the 'c2, no z3' wording is on the page itself",
+     "xagrai: the page has 3 more definitions (one English voted -1, one French, one Lojban); none used here",
+     "le'onmo: one definition; the hostile and aggressive rows both rest on it"
+    ]
+   },
+   "ABSENCE_CONFIRMED_GLOSS_ONLY": {
+    "rows": 3,
+    "english": [
+     "efficient",
+     "cold",
+     "imminent"
+    ],
+    "by": "Manus",
+    "scope": "exact gloss-word lookup on jbovlaste only; no search by definition text or by compound"
+   },
+   "MATCH_EXTRACTED": {
+    "rows": 11,
+    "what": "the 11 evidentials, CLL section 13.11; unchanged from re_read above"
+   }
+  },
+  "per_depth_counts": {
+   "MATCH_BYTES": 17,
+   "MATCH_BROWSER": 10,
+   "ABSENCE_CONFIRMED_GLOSS_ONLY": 3,
+   "MATCH_EXTRACTED": 11,
+   "UNVERIFIED": 0,
+   "total": 41
+  },
+  "open": [
+   {
+    "word": "mligla",
+    "status": "UNREAD",
+    "note": "gismu.txt's glare line reads hot, with warm given as the compound mligla ('[warm (= mligla), feverish (= bi'agla)]'). The warm PHYSICAL row here rests on glare; its slot shape (by standard x2) stays sourced to glare. mligla is a jbovlaste word and was not on the list read."
+   }
+  ],
+  "site_note": "jbovlaste is now read-only; the named replacement is lensisku.lojban.org",
+  "supersedes": "the UNVERIFIED statuses and the 'unreachable' and 'void_rows' blocks of re_read above, which are kept as the record of that date",
+  "row_field": "reread_status on every row: MATCH_BYTES, MATCH_BROWSER, ABSENCE_CONFIRMED_GLOSS_ONLY or MATCH_EXTRACTED",
+  "scope": "every row has now been re-read by someone, at the depth its status names. re_read_in_this_build stays false: this build fetched nothing."
+ },
  "data": {
   "place_structures": [
    {
@@ -65,7 +147,7 @@
      "zanmau",
      "xlame'a (better = less bad)"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "worse",
@@ -81,7 +163,7 @@
      "xlamau",
      "mleca"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "best",
@@ -98,7 +180,7 @@
      "zanrai",
      "mecyxlarai (best = least bad)"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "worst",
@@ -114,7 +196,7 @@
      "mecyxagrai (worst = least good; same wording)",
      "xlamau"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "appropriate",
@@ -130,7 +212,7 @@
      "drani",
      "sarxe"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "superior",
@@ -147,7 +229,7 @@
      "traji",
      "banli"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "inferior",
@@ -163,7 +245,7 @@
      "mleca",
      "xagme'a"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "more",
@@ -179,7 +261,7 @@
      "za'u (cmavo: digit/number 'greater than')",
      "memymau (more in number)"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "less",
@@ -194,7 +276,7 @@
     "alternatives": [
      "jdika (decreases)"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "greater",
@@ -210,7 +292,7 @@
      "barda (big against norm x3)",
      "banli (subjectively great)"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "smaller",
@@ -227,7 +309,7 @@
      "mleca",
      "cmalu"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "optimal",
@@ -244,7 +326,7 @@
      "mansyrai (best satisfies)",
      "traji"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "efficient",
@@ -260,7 +342,7 @@
      "tadji",
      "pilno"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "ABSENCE_CONFIRMED_GLOSS_ONLY"
    },
    {
     "english": "effective",
@@ -276,7 +358,7 @@
      "snada (succeeds)",
      "jalge (result)"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "warm",
@@ -293,7 +375,7 @@
      "dirba",
      "mligla (temperature sense only)"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "cold",
@@ -308,7 +390,7 @@
     "alternatives": [
      "lenku (temperature sense only)"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "ABSENCE_CONFIRMED_GLOSS_ONLY"
    },
    {
     "english": "friendly",
@@ -324,7 +406,7 @@
      "xendo",
      "nelci"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "hostile",
@@ -341,7 +423,7 @@
      "fapro (opposes)",
      "bradi (enemy)"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "aggressive",
@@ -357,7 +439,7 @@
      "gunta (commits aggression; non-emotive)",
      "le'o (attitudinal cmavo: aggressive)"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "compassionate",
@@ -373,7 +455,7 @@
      "xendo",
      "cinmo"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "safe",
@@ -390,7 +472,7 @@
      "marbi",
      "kajde"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "dangerous",
@@ -406,7 +488,7 @@
      "kajde (warns of danger)",
      "xalni"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "threat",
@@ -423,7 +505,7 @@
      "ckape",
      "snura"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "MATCH_BROWSER"
    },
    {
     "english": "imminent",
@@ -438,7 +520,7 @@
     "alternatives": [
      "balvi"
     ],
-    "reread_status": "UNVERIFIED"
+    "reread_status": "ABSENCE_CONFIRMED_GLOSS_ONLY"
    },
    {
     "english": "near",
@@ -455,7 +537,7 @@
      "jbibi'o (approaches)",
      "lamji"
     ],
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "glare (recall check)",
@@ -469,7 +551,7 @@
     "mapping_reason": "recalled: \"x1 hot by standard x2\" — source: \"x1 is hot/[warm] by standard x2.\" — same place count; recall drops \"is\" and the \"/[warm]\" variant (gismu list wording identical: \"x1 is hot/[warm] by standard x2\").",
     "alternatives": [],
     "recalled_form": "x1 hot by standard x2",
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "snura (recall check)",
@@ -483,7 +565,7 @@
     "mapping_reason": "recalled: \"x1 safe from threat x2\" — source: \"x1 is secure/safe from threat x2 (event).\" — same place count; recall drops \"is\", \"secure/\", and the \"(event)\" qualifier on x2.",
     "alternatives": [],
     "recalled_form": "x1 safe from threat x2",
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "jibni (recall check)",
@@ -497,7 +579,7 @@
     "mapping_reason": "recalled: \"x1 near x2 in property x3\" — source: \"x1 is near/close to/approximates x2 in property/quantity x3 (ka/ni).\" — same place count; recall drops \"is\", \"/close to/approximates\", \"/quantity\", and \"(ka/ni)\".",
     "alternatives": [],
     "recalled_form": "x1 near x2 in property x3",
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "zmadu (recall check)",
@@ -511,7 +593,7 @@
     "mapping_reason": "recalled: \"x1 exceeds x2 in property x3 by amount x4\" — source: \"x1 exceeds/is more than x2 in property/quantity x3 (ka/ni) by amount/excess x4.\" — same place count; recall drops \"/is more than\", \"/quantity\", \"(ka/ni)\", and \"/excess\".",
     "alternatives": [],
     "recalled_form": "x1 exceeds x2 in property x3 by amount x4",
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    },
    {
     "english": "xamgu (recall check)",
@@ -525,7 +607,7 @@
     "mapping_reason": "recalled: \"x1 good for x2 by standard x3\" — source: \"x1 (object/event) is good/beneficial/nice/[acceptable] for x2 by standard x3.\" — same place count; recall drops \"(object/event)\", \"is\", and \"/beneficial/nice/[acceptable]\".",
     "alternatives": [],
     "recalled_form": "x1 good for x2 by standard x3",
-    "reread_status": "MATCH_EXTRACTED"
+    "reread_status": "MATCH_BYTES"
    }
   ],
   "evidentials": [
