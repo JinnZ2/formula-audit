@@ -116,9 +116,30 @@ class TestReference(unittest.TestCase):
         b = routes["MATCH_BYTES"]
         self.assertEqual((len(b["file_sha256"]), b["file_bytes"]), (64, 368403))
         self.assertIs(b["file_in_this_repository"], False)
-        self.assertEqual([o["word"] for o in r["open"]], ["mligla"])
+        self.assertEqual(r["open"], [])                       # mligla, the last word, is read
+        self.assertIn("mligla", r["open_closed"])
         self.assertEqual(BY["hostile"]["reread_status"], "MATCH_BROWSER")
         self.assertEqual(BY["better"]["reread_status"], "MATCH_BROWSER")
+
+    def test_mligla_row_and_warm_source(self):
+        rows = REF["added_rows"]["place_structures"]
+        self.assertEqual([p["gismu"] for p in rows], ["mligla"])
+        m = rows[0]
+        self.assertEqual((m["def_id"], m["preferred"], m["votes"], m["reread_status"]),
+                         (18043, True, 2, "MATCH_BROWSER"))
+        self.assertEqual(m["gloss"], "warm ; mild temperature")
+        self.assertIn("is warm by standard", m["place_structure_verbatim"])
+        self.assertEqual([(o["def_id"], o["used"]) for o in m["other_definitions"]], [(1, False)])
+        self.assertIsNone(m["source_url"])                    # not relayed, so not written
+        self.assertEqual(len(DATA["place_structures"]), 30)   # the compared block is untouched
+        warm = TABLE["warm"]
+        self.assertEqual([(s["name"], s["role"], s["source_predicate"]) for s in warm["slots"][:2]],
+                         [("x1", "what is warm", "mligla"), ("x2", "by standard", "mligla")])
+        self.assertEqual(warm["slots"][1]["senses"], ["PHYSICAL"])
+        self.assertNotIn("glare", [s["source_predicate"] for s in warm["slots"]])
+        unverified = [p["english"] for p in DATA["place_structures"] + rows
+                      if p["reread_status"] not in ("MATCH_BYTES", "MATCH_BROWSER")]
+        self.assertEqual(sorted(unverified), ["cold", "efficient", "imminent"])
 
     def test_recall_checks(self):
         checks = [p for p in DATA["place_structures"] if p["class"] == "recall_check"]
@@ -155,9 +176,9 @@ class TestReference(unittest.TestCase):
         self.assertEqual((TABLE["efficient"]["shape"], BY["efficient"]["gismu"]), (None, None))
         self.assertEqual((TABLE["efficient"]["lojban"], BY["efficient"]["structure_status"]),
                          ("VOID", "VOID"))
-        # KEPT: warm's shape is still glare; the reference's xendo is its SOCIAL sense
-        self.assertEqual((TABLE["warm"]["shape"], BY["warm"]["gismu"]), ("glare", "xendo"))
-        self.assertEqual(TABLE["warm"]["senses"], {"PHYSICAL": "glare", "SOCIAL": "xendo"})
+        # warm's PHYSICAL predicate is mligla (glare = hot); the reference's xendo is SOCIAL
+        self.assertEqual((TABLE["warm"]["shape"], BY["warm"]["gismu"]), ("mligla", "xendo"))
+        self.assertEqual(TABLE["warm"]["senses"], {"PHYSICAL": "mligla", "SOCIAL": "xendo"})
 
     def test_where_the_place_table_now_agrees_with_the_reference(self):
         slots = {w: len(e["slots"]) for w, e in TABLE.items()}
@@ -173,11 +194,12 @@ class TestReference(unittest.TestCase):
         for w, g in (("more", "zmadu"), ("less", "mleca"), ("near", "jibni")):
             self.assertEqual((BY[w]["gismu"], TABLE[w]["shape"]), (g, g))
         self.assertEqual((slots["more"], slots["less"], slots["near"]), (4, 4, 3))
-        self.assertEqual(slots["warm"], 4)            # glare's 2 places + xendo's x2, x3
+        self.assertEqual(slots["warm"], 4)            # mligla's 2 places + xendo's x2, x3
 
     def test_every_source_predicate_is_in_the_reference_or_physics_def(self):
         known = {p["gismu"] for p in DATA["place_structures"]
                  if p["structure_status"] == "OBSERVED"}
+        known |= {p["gismu"] for p in REF["added_rows"]["place_structures"]}
         for w, e in TABLE.items():
             for s in e["slots"]:
                 self.assertTrue(s["source_predicate"] in known

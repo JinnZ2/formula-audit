@@ -47,11 +47,12 @@ class TestTable(unittest.TestCase):
     def test_every_slot_carries_a_source_predicate(self):
         ref = json.loads((ROOT / "REFERENCES" / "lojban_place_structures.json").read_text())
         known = {p["gismu"] for p in ref["data"]["place_structures"] if p["gismu"]}
+        known |= {p["gismu"] for p in ref["added_rows"]["place_structures"]}
         got = {w: [s["source_predicate"] for s in e["slots"]] for w, e in WORDS.items()}
         for w, preds in got.items():
             for g in preds:                               # a word of the reference, or physics_def
                 self.assertTrue(g == "physics_def" or g in known, (w, g))
-        self.assertEqual(got["warm"], ["glare", "glare", "xendo", "xendo"])
+        self.assertEqual(got["warm"], ["mligla", "mligla", "xendo", "xendo"])
         self.assertEqual(got["safe"], ["snura", "snura", "ckape", "ckape"])
         self.assertEqual(got["hostile"], ["le'onmo"] * 2)
         self.assertEqual(got["better"], ["xagmau"] * 5)
@@ -217,7 +218,7 @@ class TestV1(unittest.TestCase):
         self.assertEqual(r["usable"], {"slots": {"x1": "the water"}, "reading": "PHYSICAL",
                                        "magnitude": None})
         self.assertEqual((r["claim_status"], r["word_class"], r["shape"]),
-                         ("PROPOSED", "EMOTIVE", "glare"))
+                         ("PROPOSED", "EMOTIVE", "mligla"))
         # with the standard and a magnitude it is whole, and the magnitude is checked
         r = claim("warm", {"x1": "the water", "x2": {"text": "room standard", "is": "room"}},
                   reading="PHYSICAL", magnitude={"value": "295", "unit": "K"})
@@ -487,7 +488,7 @@ class TestV1(unittest.TestCase):
         self.assertEqual(got["better"], ("JUDGMENT", "xagmau"))
         self.assertEqual(got["appropriate"], ("JUDGMENT", "mapti"))
         self.assertEqual((got["hostile"][1], got["safe"][1], got["warm"][1]),
-                         ("le'onmo", "snura", "glare"))
+                         ("le'onmo", "snura", "mligla"))
         self.assertEqual((got["warm"][0], got["hostile"][0], got["safe"][0]),
                          ("EMOTIVE", "EMOTIVE", "FEAR"))
         self.assertIsNone(TABLE["holder"])
@@ -602,16 +603,16 @@ class TestV1(unittest.TestCase):
 
     def test_warm_sense_is_the_existing_reading(self):
         self.assertEqual((WORDS["warm"]["sense_field"], WORDS["warm"]["senses"]),
-                         ("reading", {"PHYSICAL": "glare", "SOCIAL": "xendo"}))
+                         ("reading", {"PHYSICAL": "mligla", "SOCIAL": "xendo"}))
         r = warm("295")
-        self.assertEqual((r["sense"], r["sense_predicate"]), ("PHYSICAL", "glare"))
+        self.assertEqual((r["sense"], r["sense_predicate"]), ("PHYSICAL", "mligla"))
         self.assertEqual([x["in_sense"] for x in r["slots"]], [None, True, False, False])
         r = claim("warm", {"x1": "the host"}, reading="SOCIAL")    # xendo: to whom, in what
         self.assertEqual((r["verdict"], r["missing_required"], r["sense_predicate"]),
                          ("DEGRADED", ["x3", "x4"], "xendo"))
         r = claim("warm", {"x1": "the room"}, reading="PHYSICAL", magnitude={"value": "295",
                                                                              "unit": "K"})
-        self.assertEqual(r["missing_required"], ["x2"])            # glare: by standard
+        self.assertEqual(r["missing_required"], ["x2"])            # mligla: by standard
 
     def test_evidentials_baa_and_sua(self):
         for ev, status in (("ba'a", "PROPOSED"), ("su'a", "PROPOSED"), ("ba'anai", "OBSERVED")):
