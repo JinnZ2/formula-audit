@@ -33,7 +33,7 @@ from . import snapshot as snap
 
 def _timed(path, rec=None):
     t0 = time.perf_counter()
-    rep, db = run_file(path, snapshot=rec)
+    rep, db = run_file(path, snapshot=rec, spot=25, seed=0)
     return time.perf_counter() - t0, rep, db
 
 

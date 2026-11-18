@@ -7,6 +7,9 @@ python3 -m kernel snapshot file.mm (--at L1,L2 | --at-fraction 0.25,0.5)
   --limit N     stop after N provable statements
   --until L     stop after the provable statement labelled L
   --seconds S   stop after the first provable statement that ends past S seconds
+  --spot K      with --from-snapshot: re-verify K prefix theorems drawn at random
+                (default 25) besides the snapshot theorem, which is always re-verified
+  --seed S      the draw's seed (default: fresh, and printed)
   A stopped run says so; what was not read has no verdict.
   --from-snapshot STORE   re-read and hash the snapshot's prefix; if it matches,
                 carry the prefix's verdicts and verify only what comes after.
@@ -101,6 +104,9 @@ def main(argv):
             if not labels and not fracs:
                 raise ValueError("no target")
             store = _opt(argv, "--store") or "snapshots.json"
+        spot = _opt(argv, "--spot", int)
+        seed = _opt(argv, "--seed", int)
+        spot_kw = {"spot": 25 if spot is None else spot, "seed": seed}
         kw = {}
         for flag, key, conv in (("--limit", "limit", int), ("--until", "until", str),
                                 ("--seconds", "seconds", float)):
@@ -122,7 +128,7 @@ def main(argv):
             if rep.get("snapshot") and rep["snapshot"]["state"] == "VOID":
                 return 3
             return 1 if refused else 0
-        rep, _db = run_file(argv[1], snapshot=start, **kw)
+        rep, _db = run_file(argv[1], snapshot=start, **spot_kw, **kw)
     except OSError as e:
         print(f"cannot read {argv[1]}: {e}", file=sys.stderr)
         return 2
@@ -146,6 +152,11 @@ def main(argv):
             print(f"stopped: {rep['stopped']} -- the rest of the file was not read")
         if rep.get("snapshot"):
             s = rep["snapshot"]
+            if s.get("spot"):
+                sp = s["spot"]
+                print(f"snapshot re-verified: the theorem and {len(sp['sample_positions'])} "
+                      f"of {sp['pool']} prefix theorems (spot k {sp['k']}, seed {sp['seed']}): "
+                      + ", ".join(f"{c['label']} {c['verdict']}" for c in sp["checked"]))
             print(f"snapshot {s['theorem']}: {s['state']} | carried "
                   f"{rep['carried_from_snapshot']} | verified here {rep['verified_here']}")
         print(f"provable statements {rep['provable_statements']}: PASS {c['PASS']} "
@@ -156,6 +167,8 @@ def main(argv):
         if rep["pass_resting_on_non_pass"]:
             print(f"note: {rep['pass_resting_on_non_pass']} PASS use a statement that is "
                   "not PASS")
+    if rep.get("snapshot") and rep["snapshot"]["state"] == "VOID":
+        return 3                       # the run is VOID, even where a re-check FAILed
     return 1 if c["FAIL"] else (3 if c["VOID"] or rep["file_void"] else 0)
 
 

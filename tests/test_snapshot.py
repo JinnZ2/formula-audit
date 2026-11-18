@@ -89,13 +89,18 @@ class TestWrite(Base):
         self.assertEqual(r["rests_on_non_pass"], ["id"])
         self.assertEqual(r["prefix_non_pass"]["id"]["verdict"], "FAIL")
         self.assertEqual(r["prefix_counts"], {"PASS": 3, "FAIL": 1, "VOID": 0})
-        rep, _ = run_file(p, snapshot=r)
+        rep, _ = run_file(p, snapshot=r, spot=0)
         t = {x["label"]: x for x in rep["theorem_records"]}
         self.assertEqual(t["id"]["verdict"], "FAIL")                    # kept, not promoted
         self.assertFalse(t["id"]["verified_here"])
         self.assertEqual(t["id"]["located_error"]["step"], 40)          # reason carried too
         self.assertEqual(t["idd"]["rests_on_non_pass"], ["id"])
         self.assertEqual(verdicts(rep), verdicts(run_file(p)[0]))
+        # sampled, id re-verifies FAIL as carried: no mismatch, run stands
+        rep, _ = run_file(p, snapshot=r, spot=3, seed=0)
+        self.assertEqual(rep["snapshot"]["state"], "MATCHED")
+        self.assertIn({"index": 1, "label": "id", "role": "spot", "verdict": "FAIL",
+                       "carried": "FAIL"}, rep["snapshot"]["spot"]["checked"])
 
 
 class TestFromSnapshot(Base):
@@ -105,13 +110,17 @@ class TestFromSnapshot(Base):
             self.snapshot_at(p, label)
         full = run_file(p)[0]
         for label, n in (("id", 1), ("idc", 2), ("a1i", 3), ("idd", 4)):
-            rep, _ = run_file(p, snapshot=self.stored(label))
+            rep, _ = run_file(p, snapshot=self.stored(label), spot=0)
             self.assertEqual(rep["snapshot"]["state"], "MATCHED")
-            self.assertEqual((rep["carried_from_snapshot"], rep["verified_here"]), (n, 5 - n))
+            # the snapshot theorem is always re-verified; spot 0 adds none
+            self.assertEqual((rep["carried_from_snapshot"], rep["verified_here"]),
+                             (n - 1, 6 - n))
             self.assertEqual(verdicts(rep), verdicts(full), label)
-            for r in rep["theorem_records"][:n]:
+            for r in rep["theorem_records"][:n - 1]:
                 self.assertFalse(r["verified_here"])
                 self.assertEqual(r["carried_from_snapshot"], label)
+            self.assertEqual(rep["theorem_records"][n - 1]["rechecked_for_snapshot"],
+                             "snapshot theorem")
 
     def test_edit_after_the_prefix_is_still_checked(self):
         p = self.db(EXTRA)
@@ -158,10 +167,26 @@ class TestFromSnapshot(Base):
         self.assertTrue(all(x["verdict"] == "VOID" for x in rep["theorem_records"]
                             if not x["verified_here"]))
 
-    def test_forged_snapshot_of_a_mutated_theorem_fails_downstream(self):
-        # 6b: id's statement changed; the honest writer refuses it, so the record is
-        # forged by hand with the mutated prefix's hash. id is carried as PASS (the
-        # store cannot tell), and the statement after it that cites id FAILs.
+    def test_forged_snapshot_of_a_mutated_theorem_is_void_on_load(self):
+        # round 2, 1a: the snapshot theorem itself is re-verified on every load
+        mut = EXTRA.replace("id $p |- ( P -> P ) $=", "id $p |- ( Q -> P ) $=")
+        p = self.db(mut)
+        self.db(EXTRA, "good.mm")
+        snap.write(self.d / "good.mm", ["id"], store=self.store)
+        good = self.stored("id")
+        forged = dict(good, statement="|- ( Q -> P )",
+                      prefix_sha256=prefix_sha256(p, good["prefix_lines"]))
+        rep, _ = run_file(p, snapshot=forged, spot=0)
+        self.assertEqual(rep["snapshot"]["state"], "VOID")
+        self.assertIn("id (position 1, snapshot theorem) re-verified FAIL",
+                      rep["file_void"]["reason"])
+        self.assertTrue(all(x["verdict"] != "PASS" for x in rep["theorem_records"]))
+
+    def test_forged_prefix_theorem_not_sampled_fails_downstream(self):
+        # 6b: id's statement changed; the honest writer refuses it, so a snapshot at
+        # a1i is forged by hand with the mutated prefix's hash. With no spot check
+        # id is carried as PASS (the store cannot tell), and idd, which cites id,
+        # FAILs.
         mut = EXTRA.replace("id $p |- ( P -> P ) $=", "id $p |- ( Q -> P ) $=")
         p = self.db(mut)
         written, refused = self.snapshot_at(p, "id")
@@ -169,18 +194,80 @@ class TestFromSnapshot(Base):
         self.assertIn("verdict FAIL", refused[0])
         self.assertEqual(run_file(p)[0]["theorem_records"][0]["verdict"], "FAIL")
         self.db(EXTRA, "good.mm")
-        snap.write(self.d / "good.mm", ["id"], store=self.store)
-        good = self.stored("id")
-        lines = good["prefix_lines"]
-        forged = dict(good, statement="|- ( Q -> P )",
-                      prefix_sha256=prefix_sha256(p, lines))
-        rep, _ = run_file(p, snapshot=forged)
+        snap.write(self.d / "good.mm", ["a1i"], store=self.store)
+        good = self.stored("a1i")
+        forged = dict(good, prefix_sha256=prefix_sha256(p, good["prefix_lines"]))
+        rep, _ = run_file(p, snapshot=forged, spot=0)
         t = {x["label"]: x for x in rep["theorem_records"]}
         self.assertEqual(rep["snapshot"]["state"], "MATCHED")
         self.assertEqual((t["id"]["verdict"], t["id"]["verified_here"]), ("PASS", False))
         self.assertEqual(t["idd"]["verdict"], "FAIL")                 # downstream
         self.assertTrue(t["idd"]["verified_here"])
         self.assertEqual(t["idc"]["verdict"], "PASS")                 # does not cite id
+
+
+HEAD = PROP.split("$( P -> P, in five lines")[0]
+IDC = "( wi ax-1 ax-2 mp ) AAABZBFAACAFABBAFBFBAFCAFADEE"
+
+
+def many(n, bad=None):
+    """n copies of the compressed P -> P proof; copy `bad` has a wrong statement.
+    Nothing cites any of them."""
+    out = [HEAD]
+    for i in range(1, n + 1):
+        stmt = "|- ( P -> Q )" if i == bad else "|- ( P -> P )"
+        out.append(f"t{i} $p {stmt} $= {IDC} $.\n")
+    return "".join(out)
+
+
+class TestSpotCheck(Base):
+    def forged(self, n, bad, at):
+        good = self.db(many(n), "good.mm")
+        snap.write(good, [f"t{at}"], store=self.store)
+        rec = self.stored(f"t{at}")
+        p = self.db(many(n, bad), "bad.mm")
+        return p, dict(rec, prefix_sha256=prefix_sha256(p, rec["prefix_lines"]))
+
+    def test_sample_and_seed_are_recorded(self):
+        p = self.db(many(30))
+        snap.write(p, ["t20"], store=self.store)
+        rep, _ = run_file(p, snapshot=self.stored("t20"), spot=5, seed=7)
+        sp = rep["snapshot"]["spot"]
+        self.assertEqual((sp["k"], sp["seed"], sp["pool"]), (5, 7, 19))
+        self.assertEqual(len(sp["sample_positions"]), 5)
+        self.assertEqual(len(sp["checked"]), 6)                       # 5 spot + the theorem
+        self.assertEqual(sp["checked"][-1]["role"], "snapshot theorem")
+        self.assertEqual(rep["carried_from_snapshot"], 14)
+        again, _ = run_file(p, snapshot=self.stored("t20"), spot=5, seed=7)
+        self.assertEqual(again["snapshot"]["spot"]["sample_positions"],
+                         sp["sample_positions"])                       # seed reproduces
+        fresh, _ = run_file(p, snapshot=self.stored("t20"), spot=5)
+        self.assertIsInstance(fresh["snapshot"]["spot"]["seed"], int)  # drawn, logged
+        big, _ = run_file(p, snapshot=self.stored("t20"), spot=99, seed=0)
+        self.assertEqual(big["carried_from_snapshot"], 0)              # k > pool: all
+
+    def test_forged_uncited_prefix_theorem_caught_at_about_k_over_pool(self):
+        # t13 is wrong and cited by nothing; a snapshot at t41 is forged over it.
+        p, forged = self.forged(41, 13, 41)
+        k, pool, loads = 5, 40, 200
+        caught = 0
+        for seed in range(loads):
+            rep, _ = run_file(p, snapshot=forged, spot=k, seed=seed)
+            if rep["snapshot"]["state"] == "VOID":
+                caught += 1
+                self.assertIn("t13 (position 13, spot) re-verified FAIL",
+                              rep["file_void"]["reason"])
+            else:
+                self.assertEqual({x["label"]: x["verdict"] for x in rep["theorem_records"]}
+                                 ["t13"], "PASS")                    # missed: carried
+        rate = caught / loads
+        self.assertAlmostEqual(rate, k / pool, delta=0.07)           # 0.125 expected
+        self.assertEqual(caught, 32)                    # seeds 0..199, pinned: 0.160 (sd 0.023)
+
+    def test_spot_zero_misses_it(self):
+        p, forged = self.forged(41, 13, 41)
+        rep, _ = run_file(p, snapshot=forged, spot=0, seed=0)
+        self.assertEqual(rep["snapshot"]["state"], "MATCHED")
 
 
 class TestStoreAndCli(Base):
@@ -219,6 +306,24 @@ class TestStoreAndCli(Base):
         self.assertIn("VOID", r.stdout)
         self.assertEqual(self.cli("check", str(p), "--from-snapshot", st, "--snap", "x")
                          .returncode, 2)
+        m = self.db(many(30), "m.mm")
+        self.cli("snapshot", str(m), "--at", "t20", "--store", st)
+        r = self.cli("check", str(m), "--from-snapshot", st, "--snap", "t20", "--spot", "4",
+                     "--seed", "11")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("spot k 4, seed 11", r.stdout)
+        m.write_text(many(30, 20))                     # the snapshot theorem itself wrong
+        rec = snap.select(snap.load(st), "t20")[0]
+        rec["prefix_sha256"] = prefix_sha256(m, rec["prefix_lines"])
+        rec["statement"] = "|- ( P -> Q )"
+        snap.add(st, [rec])
+        r = self.cli("check", str(m), "--from-snapshot", st, "--snap", "t20")
+        self.assertEqual(r.returncode, 2)              # two records for t20: name one
+        bad = self.d / "forged.json"
+        bad.write_text(json.dumps({"schema": "kernel-snapshot-store/1", "snapshots": [rec]}))
+        r = self.cli("check", str(m), "--from-snapshot", str(bad))
+        self.assertEqual(r.returncode, 3)              # VOID, though the re-check FAILed
+        self.assertIn("t20 (position 20, snapshot theorem) re-verified FAIL", r.stdout)
 
 
 if __name__ == "__main__":
