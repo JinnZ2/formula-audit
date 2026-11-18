@@ -74,7 +74,8 @@ VERSION = "glyph branch3-3"
 MODES = ("SOLVE", "EXPLORE")
 CASE_FIELDS = ("purpose", "environment", "energy_budget", "time_budget", "needed_function_met",
                "now", "default_drift_rate", "units", "gain", "inaction_time", "tools",
-               "evidence", "priors", "proposals", "note", "scope", "frame_edge")
+               "evidence", "priors", "proposals", "note", "scope", "frame_edge",
+               "event_log")
 UNIT_FIELDS = ("energy", "cost", "time", "drift_rate")       # always needed
 OPTIONAL_UNITS = ("gain",)                                   # needed when a step ranks
 LOG_DIR = "glyph_log"
@@ -101,6 +102,8 @@ def candidate_key(tool, inst):
         + "|" + str(inst.get("p", "")) + "|" + str(inst.get("q", ""))
     if inst.get("scope") is not None:        # a scope, with the answers given so far
         text += "|" + json.dumps([inst["scope"], inst.get("answers")], sort_keys=True)
+    if inst.get("log") is not None:          # an event log, as given
+        text += "|" + json.dumps(inst["log"], sort_keys=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -404,7 +407,7 @@ def step(case, state, base_dir, n, log, write=True):
         mode, entry["gate"] = gate(case.get("purpose"), case, state)
         entry["mode"] = mode
         env = read_environment(case.get("environment"), base_dir, case.get("scope"),
-                               case.get("frame_edge"))
+                               case.get("frame_edge"), case.get("event_log"))
         ppath = Path(base_dir or ".") / case.get("proposals", "proposals.json")
         data = read_proposals(ppath)
         paired = _paired(data)
@@ -459,7 +462,8 @@ def step(case, state, base_dir, n, log, write=True):
             delta["energy"] = best["cost"]
             if write:                                 # read the world again before going on
                 env2 = read_environment(case.get("environment"), base_dir,
-                                        case.get("scope"), case.get("frame_edge"))
+                                        case.get("scope"), case.get("frame_edge"),
+                                        case.get("event_log"))
                 entry["environment_after"] = {
                     "features": {f: len(v) for f, v in env2["features"].items()},
                     "candidates_made": len(_paired(read_proposals(ppath)))}

@@ -564,7 +564,7 @@ class TestExplore(Base):
             self.assertEqual(t["status"], "PROPOSED")
         self.assertEqual([t["name"] for t in TABLE_V0],
                          ["dimensional_analogy", "boundary_probe", "conjugate_map",
-                          "slot_fill_audit", "frame_edge"])
+                          "slot_fill_audit", "frame_edge", "precursor"])
 
 
 ROUND = "explain-then-do round, 2026-11-16"

@@ -23,6 +23,10 @@ Features read from those records (what a tool can need):
                        in: {place, time, population}. This one is read from
                        the case, not from a record: where the edge of the
                        environment was put is the operator's statement.
+  event_log            the case carries an event log: {events: [{t, outcome,
+                       ...}], declare: {...}}. Read from the case, as given.
+                       glyph/precursor.py reads it; what it cannot read it
+                       returns as VOID, part by part.
 """
 import ast
 import json
@@ -35,7 +39,7 @@ from unitaudit.check import split_sides
 
 BRANCHES = ("1", "2a", "2b", "4", "5")
 FEATURES = ("shared_dims", "mixed_region", "conjugate_exponents", "void_slots",
-            "declared_scope")
+            "declared_scope", "event_log")
 SCOPE_FIELDS = ("place", "time", "population")
 FRAME_SLOTS = ("UPSTREAM", "LAG", "SHIFT", "WHOSE")
 FRAME_WIDTH = 200
@@ -152,11 +156,27 @@ def _exponents(formula):
     return out
 
 
-def read_environment(refs, base_dir, scope=None, frame_answers=None):
+def read_event_log(log):
+    """The event log a case carries, kept as given. Raises Void when it is not
+    {events: [...]} with an optional declare table; the events themselves are
+    read by glyph/precursor.py, which returns VOID parts and never raises."""
+    if log is None:
+        return None
+    if not isinstance(log, dict) or any(k not in ("events", "declare") for k in log):
+        raise Void("event_log is {events, declare}")
+    if not isinstance(log.get("events"), list):
+        raise Void("event_log: events is not a list")
+    if "declare" in log and not isinstance(log["declare"], dict):
+        raise Void("event_log: declare is not a table")
+    return log
+
+
+def read_environment(refs, base_dir, scope=None, frame_answers=None, event_log=None):
     """Returns {"records": [...], "features": {name: [instance]}, "newest": t}.
     Raises Void naming the reference that does not check."""
     scope = read_scope(scope)
     frame_answers = read_frame_answers(frame_answers, scope)
+    event_log = read_event_log(event_log)
     if not isinstance(refs, list) or not refs:
         raise Void("environment: no references")
     rows = []
@@ -215,5 +235,7 @@ def read_environment(refs, base_dir, scope=None, frame_answers=None):
     if scope is not None:
         feats["declared_scope"].append({"sources": [], "scope": scope,
                                         "answers": frame_answers})
+    if event_log is not None:
+        feats["event_log"].append({"sources": [], "log": event_log})
     return {"records": rows, "features": feats, "newest": max(r["at"] for r in rows),
             "scope": scope}

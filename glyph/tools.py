@@ -1,4 +1,4 @@
-"""tools -- tool table v0 (five entries). Every entry is PROPOSED. Co-authored.
+"""tools -- tool table v0 (six entries). Every entry is PROPOSED. Co-authored.
 
 A tool needs environment features, has a cost (energy) and a time, and turns
 one feature instance into one candidate. A candidate is a question for the
@@ -7,6 +7,8 @@ other branches, never a result: status PROPOSED, checked by 2b, proved by 2a.
 from fractions import Fraction
 
 from unitaudit.check import split_sides
+
+from . import precursor
 
 TABLE_V0 = [
     {"name": "dimensional_analogy", "needs": ["shared_dims"], "cost": "2", "time": "1",
@@ -27,6 +29,11 @@ TABLE_V0 = [
      "status": "PROPOSED",
      "does": "an environment with a declared scope (place, time, population): ask what "
              "lies past its edge, as four questions. Questions only, never answers."},
+    {"name": "precursor", "needs": ["event_log"], "cost": "1", "time": "1",
+     "status": "PROPOSED",
+     "does": "any run with an event log: read the carried state, the precursor flag, the "
+             "mode shift and the relief flags. Readings and questions only; no verdict "
+             "on correctness. A missing declaration makes that part VOID."},
 ]
 
 # frame_edge: the four questions. The wording is fixed here; the tool fills in
@@ -153,4 +160,10 @@ def apply_tool(name, inst):
                                     "scope. The tool states nothing about the world: an "
                                     "answer and its source are the case's, kept as given "
                                     "and not read."}
+    if name == "precursor":
+        reading = precursor.check(inst["log"])
+        return "question", {"reading": reading, "questions": reading.get("questions", []),
+                            "note": "readings and questions only; no verdict on correctness. "
+                                    "Every threshold is the case's declaration; a part with "
+                                    "no declaration is VOID."}
     raise ValueError(f"no such tool: {name}")

@@ -421,7 +421,7 @@ units           the statement is about numbers; the units on the proposal are no
 
 Status: the definition below is PROPOSED. `glyph/` implements it as a v0 that
 passes its own tests within tested scope (see "What is built" at the end of
-this section). The tool table is five PROPOSED tools; whether they are the
+this section). The tool table is six PROPOSED tools; whether they are the
 right tools, or useful, is not established.
 
 **What it is.** A compressed reasoning operator, in the way a differential
@@ -576,6 +576,10 @@ slot_fill_audit      void_slots: a branch-4 record with a VOID slot  a question 
 frame_edge           declared_scope: the case declares the scope     four questions about what
                      its environment was drawn in                    lies past that edge, each
                      {place, time, population}                       logged as a slot
+precursor            event_log: the case carries an event log        readings (carried state,
+                     {events, declare}; any run with one             precursor flag, mode shift,
+                                                                     relief flags) and three
+                                                                     questions; no verdict
 ```
 
 frame_edge: where the edge of the environment was drawn
@@ -606,9 +610,42 @@ repository owner and are not re-run here; the two cases are in the tests as
 text. The owner's note on the ice case, "4 in rule -> 8 in practice", is
 carried too: the tool raises the flag and computes no margin.
 
+precursor: read the slope before the peak
+
+```text
+case      event_log  {events: [{t, outcome PASS | FAIL | VOID, state?, target?}],
+                      declare: {tau, window, streak_limit, trend_limit}}   each optional
+                      |
+tool      glyph/precursor.py, filed verbatim (sha256 d2cdb8d71df9...), cost 1
+            carried state   each FAIL adds a pulse that decays with the declared tau
+            precursor       trend of rolling variance and lag-1 autocorrelation of the
+                            state signal: PRECURSOR (both rise) | WATCH (one) | NONE
+            mode shift      a run of FAILs on one target reaching streak_limit
+            relief flags    a PASS straight after two or more FAILs: check it by execution
+                      |
+output    readings and three fixed questions, written as one question to proposals.json.
+          No verdict on correctness. A missing declaration -> that part is VOID, kept.
+```
+
+```sh
+python3 -m glyph.precursor --selftest        # 10 checks
+python3 -m glyph.precursor case.json         # case.json is the event_log table itself
+```
+
+The file's own docstring says `python3 precursor.py`. From inside `glyph/` that
+fails at import: `glyph/operator.py` shadows the standard library's `operator`.
+The file is kept as delivered; run it with `-m` from the repository root.
+Measured operating points and sources: `REFERENCES/precursor_operating_curve.md`.
+
 Limits of the v0
 
 ```text
+precursor      readings only. The flag thresholds are the case's declarations and
+               nothing here says what a good tau, window or limit is. On the file's own
+               planted signal at trend_limit 0.5 the flag fires on 33 of 100 runs and on
+               2 of 100 white-noise runs (measured here, one construction, one window):
+               most planted runs are missed. The numbers in a reading are floats; no
+               other branch reads them. Whether the tool is useful is not established.
 frame_edge     states nothing about the world. An answer and its source are text from
                the case, kept and not read: "nothing" with a source counts as FILLED.
                It does not say how large a margin should be, and no other branch reads
