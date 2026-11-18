@@ -747,6 +747,9 @@ Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (re
                 from the CLL, each with its URL. This build could not reach lojban.org
                 and re-read none of it; the file was typed in from a paste and has not
                 been byte-compared with the original (re_read_in_this_build: false).
+                Note 2026-11-18: transcription verified as data against the relayed
+                file (426 fields, 0 differences; compared_as_data in the file). The
+                re-read against lojban.org is still open.
 table vs        the place table is realigned to the reference, and is still PROPOSED:
 reference       a word's slots are the holder's to set. Union rule: a slot the table
                 already had is kept when a predicate of the reference carries that
