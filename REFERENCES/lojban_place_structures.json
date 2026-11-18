@@ -118,17 +118,47 @@
    "UNVERIFIED": 0,
    "total": 41
   },
-  "open": [
-   {
-    "word": "mligla",
-    "status": "UNREAD",
-    "note": "gismu.txt's glare line reads hot, with warm given as the compound mligla ('[warm (= mligla), feverish (= bi'agla)]'). The warm PHYSICAL row here rests on glare; its slot shape (by standard x2) stays sourced to glare. mligla is a jbovlaste word and was not on the list read."
-   }
-  ],
+  "open": [],
+  "open_closed": {"mligla": "read 2026-11-18T16:57:29Z by Manus (jbovlaste, def #18043); see added_rows. All 9 compound words are read."},
   "site_note": "jbovlaste is now read-only; the named replacement is lensisku.lojban.org",
   "supersedes": "the UNVERIFIED statuses and the 'unreachable' and 'void_rows' blocks of re_read above, which are kept as the record of that date",
   "row_field": "reread_status on every row: MATCH_BYTES, MATCH_BROWSER, ABSENCE_CONFIRMED_GLOSS_ONLY or MATCH_EXTRACTED",
   "scope": "every row has now been re-read by someone, at the depth its status names. re_read_in_this_build stays false: this build fetched nothing."
+ },
+ "added_rows": {
+  "note": "rows added here after the relayed file was compared; they are outside 'data', so compared_as_data (30 + 11 rows, 426 fields) still describes what it measured",
+  "place_structures": [
+   {
+    "english": "warm",
+    "class": "physical",
+    "gismu": "mligla",
+    "place_structure_verbatim": "g₁=m₁ is warm by standard g₂.",
+    "verbatim_basis": "as relayed to this build, subscripts as relayed",
+    "gloss": "warm ; mild temperature",
+    "def_id": 18043,
+    "preferred": true,
+    "votes": 2,
+    "source": "jbovlaste, word mligla",
+    "source_url": null,
+    "source_url_note": "the page URL was not relayed to this build",
+    "read_by": "Manus",
+    "read_at": "2026-11-18T16:57:29Z",
+    "saved_html": "saved by Manus; not in this repository",
+    "structure_status": "OBSERVED",
+    "mapping_status": "PROPOSED",
+    "mapping_reason": "gismu.txt's glare line gives glare as hot and names mligla as the warm form; mligla's preferred definition has the same two places as glare (thing, by standard)",
+    "other_definitions": [
+     {
+      "def_id": 1,
+      "votes": 0,
+      "preferred": false,
+      "used": false,
+      "place_structure_verbatim": "x₁ is a hot with hot standard x₂"
+     }
+    ],
+    "reread_status": "MATCH_BROWSER"
+   }
+  ]
  },
  "data": {
   "place_structures": [

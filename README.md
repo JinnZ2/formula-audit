@@ -691,8 +691,8 @@ places.json   word -> ordered slots (name, role, required, status tag, source_pr
               optional bounds, optional senses), class (JUDGMENT / COMPARATIVE /
               EMOTIVE / FEAR, or null), shape, optional senses + sense_field
               word         slots (source_predicate)                          class
-              warm         x1 what is warm (glare)                           EMOTIVE
-                             PHYSICAL: x2 by standard (glare)
+              warm         x1 what is warm (mligla)                          EMOTIVE
+                             PHYSICAL: x2 by standard (mligla)
                              SOCIAL:   x3 to whom, x4 in what behaviour (xendo)
               safe         x1 what is safe (snura), x3 for whom (ckape)      FEAR
                              PROTECTED:    x2 from threat (snura)
@@ -812,6 +812,11 @@ Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (re
                 list's warm form, unread. jbovlaste is read-only; its named replacement
                 is lensisku.lojban.org. This build fetched nothing:
                 re_read_in_this_build: false.
+                Note 2026-11-18, closing: mligla is read (jbovlaste def #18043, preferred,
+                vote 2: warm by standard; MATCH_BROWSER; in added_rows, outside the
+                compared block). The place table's warm PHYSICAL predicate is now mligla
+                (glare = hot); its slots are unchanged. No word is left unread; the 3
+                no-word rows stay ABSENCE_CONFIRMED_GLOSS_ONLY.
 table vs        the place table is realigned to the reference, and is still PROPOSED:
 reference       a word's slots are the holder's to set. Union rule: a slot the table
                 already had is kept when a predicate of the reference carries that

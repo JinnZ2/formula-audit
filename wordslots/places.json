@@ -1,14 +1,14 @@
 {
- "note": "place table v2: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. Realigned to the relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17; relayed, not re-read by this build). Each slot names the predicate its place comes from in source_predicate: a gismu or lujvo of the reference, or physics_def where the reference has no Lojban word. Union rule: a slot the table already had is kept when a predicate of the reference carries that place (safe 'for whom', from ckape); a slot no predicate of the reference carries is dropped (the standard of hostile and of appropriate). efficient has no Lojban word in the reference: lojban VOID is kept in the entry and its slots are physics_def (thing, useful output, input supplied, process, baseline compared against), set by the repository owner's order. See the README.",
+ "note": "place table v2: word -> ordered slots. Every entry here is PROPOSED: written as an example, not confirmed by the holder of the word. The checker never upgrades a tag. Realigned to the relayed reference (REFERENCES/lojban_place_structures.json, received 2026-11-17; relayed, not re-read by this build). Each slot names the predicate its place comes from in source_predicate: a gismu or lujvo of the reference, or physics_def where the reference has no Lojban word. Union rule: a slot the table already had is kept when a predicate of the reference carries that place (safe 'for whom', from ckape); a slot no predicate of the reference carries is dropped (the standard of hostile and of appropriate). efficient has no Lojban word in the reference: lojban VOID is kept in the entry and its slots are physics_def (thing, useful output, input supplied, process, baseline compared against), set by the repository owner's order. See the README. Note 2026-11-18: warm's PHYSICAL predicate is mligla, not glare: glare = hot, and the gismu list names mligla as the warm form ('[warm (= mligla), feverish (= bi'agla)]'). The slots are unchanged (x1, x2 by standard); mligla's preferred jbovlaste definition has the same two places.",
  "holder": null,
  "words": {
   "warm": {
    "status": "PROPOSED",
    "class": "EMOTIVE",
-   "shape": "glare",
+   "shape": "mligla",
    "sense_field": "reading",
    "senses": {
-    "PHYSICAL": "glare",
+    "PHYSICAL": "mligla",
     "SOCIAL": "xendo"
    },
    "magnitude_required_for": [
@@ -20,14 +20,14 @@
      "role": "what is warm",
      "required": true,
      "status": "PROPOSED",
-     "source_predicate": "glare"
+     "source_predicate": "mligla"
     },
     {
      "name": "x2",
      "role": "by standard",
      "required": true,
      "status": "PROPOSED",
-     "source_predicate": "glare",
+     "source_predicate": "mligla",
      "senses": [
       "PHYSICAL"
      ],
