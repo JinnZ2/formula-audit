@@ -36,6 +36,39 @@ class TestReference(unittest.TestCase):
                                 if p["structure_status"] == "VOID"),
                          ["cold", "efficient", "imminent"])
 
+    def test_compared_as_data(self):
+        # the transcription was compared with the relayed file; lojban.org was not re-read
+        self.assertFalse(REF["re_read_in_this_build"])
+        c = REF["compared_as_data"]
+        self.assertEqual(c["against_sha256"],
+                         "524b80d6571221cd75dceef52a5dd4fc01c796e33723ae5982007cb059ab8daa")
+        self.assertEqual(c["differences"], 0)
+        self.assertEqual(c["rows"], {k: len(v) for k, v in DATA.items()})
+        self.assertEqual(c["fields"], sum(len(r) for rows in DATA.values() for r in rows))
+
+    def test_compare_again_when_the_relayed_file_is_beside_this_repository(self):
+        import hashlib
+        c = REF["compared_as_data"]
+        rel = c["against"].split(": ", 1)[1]
+        found = [p for p in (ROOT.parent / d / rel for d in (
+            "geometric-to-binary-computational-bridge",
+            "jinnz2/geometric-to-binary-computational-bridge")) if p.is_file()]
+        if not found:
+            self.skipTest("NOT_RUN: relayed file not beside this repository")
+        raw = found[0].read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), c["against_sha256"])
+        other = json.loads(raw)
+        self.assertEqual(sorted(other), sorted(DATA))
+        fields = diffs = 0
+        for sec in DATA:
+            self.assertEqual(len(DATA[sec]), len(other[sec]))
+            for x, y in zip(DATA[sec], other[sec]):
+                for k in sorted(set(x) | set(y)):
+                    fields += 1
+                    if k not in x or k not in y or x[k] != y[k] or type(x[k]) is not type(y[k]):
+                        diffs += 1
+        self.assertEqual((fields, diffs), (c["fields"], c["differences"]))
+
     def test_recall_checks(self):
         checks = [p for p in DATA["place_structures"] if p["class"] == "recall_check"]
         self.assertEqual(sorted(p["gismu"] for p in checks),

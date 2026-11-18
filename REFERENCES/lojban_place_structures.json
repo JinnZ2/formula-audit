@@ -2,6 +2,17 @@
  "note": "Lojban place structures and evidentials, as pasted into the build session on 2026-11-17 by the repository owner. Relayed: gathered by another reader from jbovlaste.lojban.org and the CLL; lojban.org could not be reached from this build, so nothing here was re-read by it. The status tags inside 'data' are that reader's. The field 'gismu' also holds lujvo and cmavo. Co-authored. CC0.",
  "received": "2026-11-17",
  "re_read_in_this_build": false,
+ "compared_as_data": {
+  "against": "JinnZ2/geometric-to-binary-computational-bridge: experiments/experiment_bridge/evidence/kimi_as_received/lojban_wordslot_reference.json",
+  "against_commit": "e8b7d12fa3a1d59c9ce25da1d573d5e6f17e58dc",
+  "against_sha256": "524b80d6571221cd75dceef52a5dd4fc01c796e33723ae5982007cb059ab8daa",
+  "compared": "the 'data' block here against that file, as parsed JSON: every field of every row, value and type",
+  "rows": {"place_structures": 30, "evidentials": 11},
+  "fields": 426,
+  "differences": 0,
+  "compared_on": "2026-11-18",
+  "scope": "transcription only: this copy matches the relayed file. It is not a re-read against lojban.org; re_read_in_this_build stays false."
+ },
  "data": {
   "place_structures": [
    {
