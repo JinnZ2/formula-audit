@@ -130,7 +130,8 @@ class TestReference(unittest.TestCase):
         self.assertEqual(m["gloss"], "warm ; mild temperature")
         self.assertIn("is warm by standard", m["place_structure_verbatim"])
         self.assertEqual([(o["def_id"], o["used"]) for o in m["other_definitions"]], [(1, False)])
-        self.assertIsNone(m["source_url"])                    # not relayed, so not written
+        self.assertEqual((m["source_url"], m["retrieved"], m["read_by"]),
+                         ("https://jbovlaste.lojban.org/dict/mligla", "2026-11-18T16:57:29Z", "Manus"))
         self.assertEqual(len(DATA["place_structures"]), 30)   # the compared block is untouched
         warm = TABLE["warm"]
         self.assertEqual([(s["name"], s["role"], s["source_predicate"]) for s in warm["slots"][:2]],
