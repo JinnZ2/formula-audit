@@ -154,24 +154,41 @@ Snapshots (branch 2a)
 
 ```text
 python3 -m kernel snapshot file.mm (--at L1,L2 | --at-fraction 0.25,0.5) [--store snapshots.json]
-python3 -m kernel check file.mm --from-snapshot snapshots.json [--snap LABEL]
+python3 -m kernel check file.mm --from-snapshot snapshots.json [--snap LABEL] [--spot K] [--seed S]
 python3 -m kernel.snapshot_measure path/to/set.mm [--repeats 3]   # by hand, not CI
+python3 -m kernel.snapshot_round2 path/to/set.mm [--loads 200]   # by hand, not CI
 
 snapshot    {theorem, statement, axioms_used (transitive, syntax axioms included),
              prefix_sha256 of the lines read through its proof, prefix_lines,
              theorem_index, kernel_version, rests_on_non_pass, prefix_non_pass}
 write       only after a kernel PASS for that theorem; anything else is refused
             and nothing is stored for it
+cut point   --at-fraction f picks position k = round(n * f) among the n provable
+            statements read, clamped to 1..n. round is Python's: halves go to the
+            even integer (n = 5: 0.25, 0.5, 0.75 -> 1, 2, 4)
 use         the prefix is re-read and hashed first; a different hash (any byte,
             a comment, line endings), kernel version, or a statement not where the
-            snapshot says -> VOID, nothing verified. Else the prefix's statements
-            are carried (verified_here false, PASS unless listed in
-            prefix_non_pass, which keep their verdict and reason) and only the
-            statements after it are verified
+            snapshot says -> VOID, nothing verified. Then, while reading the
+            prefix:
+              the snapshot theorem is re-verified, always
+              K more prefix theorems (--spot, default 25), drawn without
+              replacement from positions 1 .. index-1 with --seed (default a fresh
+              seed), are re-verified; seed and sample are in the report
+              a re-verified verdict other than the one carried -> the run is VOID,
+              naming the theorem (exit 3)
+              every other prefix theorem is carried (verified_here false; PASS
+              unless listed in prefix_non_pass, which keep their verdict and reason)
+            the statements after the prefix are verified
 saved       only proof checking: the prefix is still read, hashed and parsed
-limit       the store is plain JSON; a forged or edited record that claims PASS
-            is caught only by later statements that cite the theorem (they FAIL),
-            and not at all if none does
+limit       the store is plain JSON; a forged or edited record is not detected as
+            such. Measured on set.mm (REFERENCES/kernel_snapshots_round2.md):
+              forged PASS for the snapshot theorem: caught on every load
+              forged PASS for another prefix theorem nothing cites: caught only
+              when drawn, chance K / (index - 1) per load. 200 seeded loads, K 25:
+              index 101: 43 caught (0.215, expected 0.25)
+              index 1001: 7 caught (0.035, expected 0.025)
+              so at a 75 % cut on set.mm (index 36,293) one load catches it with
+              chance about 0.0007; a later verified statement citing it FAILs
 ```
 
 Limits of branch 2a

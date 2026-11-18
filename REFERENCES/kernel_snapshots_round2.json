@@ -1,0 +1,147 @@
+{
+ "input": "set.mm",
+ "input_sha256": "099864b6785c45be66026cf19ec3f3a77c9cac15d586eb954d8de205ea2fa52b",
+ "k": 25,
+ "human_interest": null,
+ "ai_interest": null,
+ "forged_snapshot": {
+  "snapshot": "fineqvpow",
+  "index": 33888,
+  "cited_by": 0,
+  "line_edited": 581631,
+  "state": "VOID",
+  "reason": "snapshot fineqvpow: fineqvpow (position 33888, snapshot theorem) re-verified FAIL; the snapshot carries PASS",
+  "verified_here": 26
+ },
+ "forged_prefix": [
+  {
+   "snapshot": "jarr",
+   "index": 101,
+   "pool": 100,
+   "k": 25,
+   "victim": "pm2.83",
+   "victim_line_edited": 1451,
+   "victim_full_check": "FAIL",
+   "loads": 200,
+   "seeds": "0..199",
+   "caught": 43,
+   "rate": 0.215,
+   "expected": 0.25,
+   "binomial_sd": 0.0306,
+   "caught_naming_another": 0,
+   "seconds_all_loads": 0.9
+  },
+  {
+   "snapshot": "pm4.45",
+   "index": 1001,
+   "pool": 1000,
+   "k": 25,
+   "victim": "pm5.36",
+   "victim_line_edited": 7261,
+   "victim_full_check": "FAIL",
+   "loads": 200,
+   "seeds": "0..199",
+   "caught": 7,
+   "rate": 0.035,
+   "expected": 0.025,
+   "binomial_sd": 0.011,
+   "caught_naming_another": 0,
+   "seconds_all_loads": 6.59
+  }
+ ],
+ "profile": {
+  "full": [
+   {
+    "read": 0.09,
+    "hash": 0.0,
+    "parse": 3.24,
+    "verify": 17.18,
+    "total": 20.5,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 48391,
+    "carried": 0
+   },
+   {
+    "read": 0.08,
+    "hash": 0.0,
+    "parse": 3.24,
+    "verify": 17.06,
+    "total": 20.39,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 48391,
+    "carried": 0
+   },
+   {
+    "read": 0.1,
+    "hash": 0.0,
+    "parse": 3.06,
+    "verify": 16.03,
+    "total": 19.19,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 48391,
+    "carried": 0
+   }
+  ],
+  "from_75": [
+   {
+    "read": 0.08,
+    "hash": 0.08,
+    "parse": 4.27,
+    "verify": 5.08,
+    "total": 9.51,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 12124,
+    "carried": 36267
+   },
+   {
+    "read": 0.09,
+    "hash": 0.08,
+    "parse": 3.77,
+    "verify": 4.52,
+    "total": 8.46,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 12124,
+    "carried": 36267
+   },
+   {
+    "read": 0.09,
+    "hash": 0.07,
+    "parse": 4.36,
+    "verify": 4.63,
+    "total": 9.16,
+    "counts": {
+     "PASS": 48391,
+     "FAIL": 0,
+     "VOID": 0
+    },
+    "verified_here": 12124,
+    "carried": 36267
+   }
+  ],
+  "snapshot_75": {
+   "theorem": "wl-sbcom2d-lem2",
+   "index": 36293,
+   "of": 48391
+  }
+ }
+}
