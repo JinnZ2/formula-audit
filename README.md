@@ -765,6 +765,14 @@ Lojban          a relayed reference, REFERENCES/lojban_place_structures.json (re
                 the file; quotes extracted by a fetch tool, not bytes): 12 gismu
                 (17 rows) and the 11 evidentials match; 8 jbovlaste words (10 rows)
                 and the 3 no-word rows are UNVERIFIED. re_read_in_this_build: false.
+                Note 2026-11-18, last: every row is now re-read by someone (all_rows_reread,
+                re_read_2 in the file): 17 gismu rows MATCH_BYTES (gismu.txt, sha256
+                f2fc4cff..., two routes; the file is not in this repository), 10 jbovlaste
+                rows MATCH_BROWSER, 3 no-word rows ABSENCE_CONFIRMED_GLOSS_ONLY (exact
+                gloss lookup only), 11 evidentials MATCH_EXTRACTED. Open: mligla, the
+                list's warm form, unread. jbovlaste is read-only; its named replacement
+                is lensisku.lojban.org. This build fetched nothing:
+                re_read_in_this_build: false.
 table vs        the place table is realigned to the reference, and is still PROPOSED:
 reference       a word's slots are the holder's to set. Union rule: a slot the table
                 already had is kept when a predicate of the reference carries that
