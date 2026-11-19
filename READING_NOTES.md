@@ -34,3 +34,10 @@ Measurand: "default behind the integration branch". This repository's GitHub def
 `main` (at `c1acb59`), with 3 commits `main` does not have (their content is on `main` as
 `5fcc404` and `7574be0`). The setting change is pending; the route is Manus or the owner on
 GitHub. Until then a clone without `-b main` reads the stale tree.
+
+## Note 2026-11-19: the outside audit's author
+
+The 2026-11-17 outside audit named at the top of this file: author recorded as Kimi-or-GPT,
+UNRESOLVED (owner-stated 2026-11-19; neither is confirmed). Its text is not filed in this
+repository or in study-aperture. The rows above are the record of it; the audit itself cannot be
+re-read from here.
