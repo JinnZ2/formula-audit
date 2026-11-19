@@ -13,6 +13,12 @@ examples to the behaviour they describe, and fails if either side changes.
 examples and are not yet registered (UNCHECKED, not wrong; the selection rule
 is a heuristic). First run, 2026-11-16 on `main` at `6ce55ec`: 13 registered,
 all matching; 6 UNCHECKED, in branches 3, 4, 5 and the seam.
+Second run, 2026-11-19 on `main` at `a216f74`: 7 UNCHECKED (the glyph
+"gain undeclared" line was new). 10 claims added: 23 registered, all matching;
+0 UNCHECKED. One of the 10 binds "pieces that HOLD and pieces that FAIL -> MIXED"
+and fails if `holds_elsewhere` comes back: the drift this file itself carried
+(see the 2026-11-19 correction) was not in the register then. 0 UNCHECKED means
+the heuristic finds nothing more, not that every example is bound.
 
 | Misread | What the repository does | Check |
 |---|---|---|
