@@ -24,7 +24,7 @@ all matching; 6 UNCHECKED, in branches 3, 4, 5 and the seam.
 | `unitaudit` converts units, or reads km and m as the same today | It answers "which dimension", never "how many". km, eV and degC are not in the unit table, so today they come back VOID (unknown unit), not converted and not PASS. The README blind-spot list describes what a table without scale factors would miss if such units were added. | `unitaudit/dims.py` header; README "Known blind spots of branch 1" |
 | A units PASS means physically the same quantity | Angle is dimensionless, so torque checks the same as energy, and `sin(f*t)` passes with f in Hz. | README "Known blind spots of branch 1" |
 | `kernel` is a production Metamath verifier | It checks hand-written test databases in CI; `set.mm` is not in the repository and is run by hand only. | README "Branch 2a" |
-| The default branch shows the current repository | Until the owner changes it, GitHub's default branch here is `claude/quasicrystal-projection-properties-448bx7`, which stopped at branches 1, 2a and 2b with branch 3 VOID. Current work is on `main` (branches 3, 4 and 5 built). The 2026-11-17 audit read the default branch; so did the first version of this file. | `git branch -r`; repository settings |
+| The default branch shows the current repository | Until 2026-11-19, GitHub's default branch here was `claude/quasicrystal-projection-properties-448bx7`, which stopped at branches 1, 2a and 2b with branch 3 VOID. Current work is on `main` (branches 3, 4 and 5 built), which is now the default. The 2026-11-17 audit read the old default branch; so did the first version of this file. | `git branch -r`; repository settings |
 | A pure-number check that passes was checked against floating-point error | It was not exercised there at all; it was exact by construction. | this file, first row |
 
 ## Note 2026-11-19: the default branch is stale
@@ -32,8 +32,11 @@ all matching; 6 UNCHECKED, in branches 3, 4, 5 and the seam.
 Measurand: "default behind the integration branch". This repository's GitHub default,
 `claude/quasicrystal-projection-properties-448bx7` at `7df0d81`, is STALE: 45 commits behind
 `main` (at `c1acb59`), with 3 commits `main` does not have (their content is on `main` as
-`5fcc404` and `7574be0`). The setting change is pending; the route is Manus or the owner on
-GitHub. Until then a clone without `-b main` reads the stale tree.
+`5fcc404` and `7574be0`). Until the setting changed, a clone without `-b main` read the stale tree.
+
+Resolved 2026-11-19: Perplexity Computer changed the default branch to `main`
+(`gh repo edit --default-branch main`), with the owner's authorization. The old branch is kept,
+not deleted.
 
 ## Note 2026-11-19: the outside audit's author
 
