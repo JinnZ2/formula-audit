@@ -44,6 +44,11 @@ Resolved 2026-11-19: Perplexity Computer changed the default branch to `main`
 (`gh repo edit --default-branch main`), with the owner's authorization. The old branch is kept,
 not deleted.
 
+Superseded 2026-11-20 (the note above is kept as written): default = `main`, confirmed
+2026-11-20 04:50Z at `f0a40a3` (changed by Perplexity, PR #14). Read again from this
+repository's remote at 2026-11-20T04:52Z: `git ls-remote --symref origin HEAD` returns
+`ref: refs/heads/main`, HEAD `f0a40a3`.
+
 ## Note 2026-11-19: the outside audit's author
 
 The 2026-11-17 outside audit named at the top of this file: author recorded as Kimi-or-GPT,
